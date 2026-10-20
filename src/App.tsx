@@ -31,11 +31,30 @@ export default function App() {
   const [enableAO, setEnableAO] = useState(true);
   const [atlasCanvas, setAtlasCanvas] = useState<HTMLCanvasElement | null>(null);
   const [mobCount, setMobCount] = useState(3);
+  const [weather, setWeather] = useState<'sunny' | 'rain' | 'thunderstorm' | 'snow'>('sunny');
+  const [isVoiceActive, setIsVoiceActive] = useState(false);
+  const [claimStatus, setClaimStatus] = useState<string | null>(null);
+  const [activeEmote, setActiveEmote] = useState<'wave' | 'dance' | 'sit' | 'swim' | 'none'>('none');
   const [spawnMobTrigger, setSpawnMobTrigger] = useState<{
-    type: 'steve' | 'zombie' | 'creeper';
+    type: 'steve' | 'zombie' | 'creeper' | 'skeleton' | 'enderman' | 'cow' | 'sheep' | 'pig';
     timestamp: number;
   } | null>(null);
   const [clearMobsTrigger, setClearMobsTrigger] = useState(0);
+
+  // --- Mini-game Events State ---
+  const [activeEvent, setActiveEvent] = useState<any>(null);
+  const [eventNotification, setEventNotification] = useState<string | null>(null);
+  const [triggerEvent, setTriggerEvent] = useState<any>(null);
+
+  const handleTriggerEvent = (type: any) => {
+    setTriggerEvent(type);
+    setTimeout(() => setTriggerEvent(null), 100);
+  };
+
+  const handleEventNotification = (msg: string) => {
+    setEventNotification(msg);
+    setTimeout(() => setEventNotification(null), 4000);
+  };
 
   // --- Survival Metrics (20 HP / 10 Hearts, 20 Hunger / 10 Drumsticks) ---
   const [health, setHealth] = useState(20);
@@ -112,13 +131,13 @@ export default function App() {
     setPointerLockRequested(true);
   };
 
-  const handleSpawnMob = (type: 'steve' | 'zombie' | 'creeper') => {
+  const handleSpawnMob = useCallback((type: 'steve' | 'zombie' | 'creeper' | 'skeleton' | 'enderman' | 'cow' | 'sheep' | 'pig') => {
     setSpawnMobTrigger({ type, timestamp: Date.now() });
-  };
+  }, []);
 
-  const handleClearMobs = () => {
+  const handleClearMobs = useCallback(() => {
     setClearMobsTrigger((prev) => prev + 1);
-  };
+  }, []);
 
   // Tool Durability Degradation handler
   const handleToolUsed = useCallback(() => {
@@ -380,6 +399,13 @@ export default function App() {
           spawnMobTrigger={spawnMobTrigger}
           clearMobsTrigger={clearMobsTrigger}
           onMobCountUpdate={setMobCount}
+          weather={weather}
+          onWeatherChange={setWeather}
+          activeEmote={activeEmote}
+          onClaimStatus={setClaimStatus}
+          triggerEvent={triggerEvent}
+          onActiveEventUpdate={setActiveEvent}
+          onEventNotification={handleEventNotification}
         />
       </div>
 
@@ -404,6 +430,8 @@ export default function App() {
           hunger={hunger}
           isSprinting={isSprinting}
           damageFlashTrigger={damageFlashTrigger}
+          activeEvent={activeEvent}
+          eventNotification={eventNotification}
         />
       )}
 
@@ -445,6 +473,7 @@ export default function App() {
         onRequestPointerLock={handleRequestPointerLock}
         isFlyMode={isFlyMode}
         onToggleFlyMode={() => setIsFlyMode(!isFlyMode)}
+        onTriggerEvent={handleTriggerEvent}
         renderDistance={renderDistance}
         onChangeRenderDistance={setRenderDistance}
         naiveMode={naiveMode}
@@ -461,6 +490,10 @@ export default function App() {
         mobCount={mobCount}
         onSpawnMob={handleSpawnMob}
         onClearMobs={handleClearMobs}
+        weather={weather}
+        onChangeWeather={setWeather}
+        activeEmote={activeEmote}
+        onSelectEmote={setActiveEmote}
       />
     </div>
   );

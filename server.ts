@@ -284,7 +284,7 @@ wss.on('connection', (ws: WebSocket) => {
   const playerState: PlayerState = {
     id: playerId,
     x: 8.0,
-    y: 28.0,
+    y: 21.0,
     z: 8.0,
     yaw: 0,
     pitch: 0,

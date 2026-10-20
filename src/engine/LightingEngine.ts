@@ -8,8 +8,14 @@
  * - Lower 4 bits: Block Light (0 to 15, from torches, lava, etc.)
  */
 
-import { CHUNK_SIZE_X, CHUNK_SIZE_Y, CHUNK_SIZE_Z, BLOCK, BLOCK_DEFS } from './types';
-import { getBlockIndex } from './ChunkMeshGenerator';
+import {
+  CHUNK_SIZE_X,
+  CHUNK_SIZE_Y,
+  CHUNK_SIZE_Z,
+  BLOCK,
+  BLOCK_DEFS,
+} from "./types";
+import { getBlockIndex } from "./ChunkMeshGenerator";
 
 export const MAX_LIGHT = 15;
 export const TORCH_LIGHT = 14;
@@ -19,15 +25,18 @@ export const LAVA_LIGHT = 15;
  * Bit-packing helpers for light byte
  */
 export function packLight(sky: number, block: number): number {
-  return ((Math.max(0, Math.min(15, sky)) & 0x0F) << 4) | (Math.max(0, Math.min(15, block)) & 0x0F);
+  return (
+    ((Math.max(0, Math.min(15, sky)) & 0x0f) << 4) |
+    (Math.max(0, Math.min(15, block)) & 0x0f)
+  );
 }
 
 export function unpackSky(val: number): number {
-  return (val >> 4) & 0x0F;
+  return (val >> 4) & 0x0f;
 }
 
 export function unpackBlock(val: number): number {
-  return val & 0x0F;
+  return val & 0x0f;
 }
 
 /**
@@ -57,14 +66,17 @@ export function getLightEmission(blockId: number): number {
 export function calculateVertexAO(
   side1IsOpaque: boolean,
   side2IsOpaque: boolean,
-  cornerIsOpaque: boolean
+  cornerIsOpaque: boolean,
 ): { factor: number; level: number } {
   // If both adjacent edges are blocked, the corner is completely shadowed (60% occlusion)
   if (side1IsOpaque && side2IsOpaque) {
     return { factor: 0.4, level: 3 };
   }
 
-  const count = (side1IsOpaque ? 1 : 0) + (side2IsOpaque ? 1 : 0) + (cornerIsOpaque ? 1 : 0);
+  const count =
+    (side1IsOpaque ? 1 : 0) +
+    (side2IsOpaque ? 1 : 0) +
+    (cornerIsOpaque ? 1 : 0);
   switch (count) {
     case 3:
       return { factor: 0.4, level: 3 }; // 60% occlusion
@@ -90,20 +102,24 @@ export function computeVertexColor(
   blockLight: number,
   aoFactor: number,
   dirTint: number = 1.0,
-  skyIntensity: number = 1.0
+  skyIntensity: number = 1.0,
 ): [number, number, number] {
   const minAmbient = 0.08;
 
   // Normalized intensity curves (gamma curve for realistic voxel lighting)
-  const skyNorm = Math.pow(Math.max(0, Math.min(15, skyLight)) / 15.0, 1.35) * skyIntensity;
-  const blockNorm = Math.pow(Math.max(0, Math.min(15, blockLight)) / 15.0, 1.25);
+  const skyNorm =
+    Math.pow(Math.max(0, Math.min(15, skyLight)) / 15.0, 1.35) * skyIntensity;
+  const blockNorm = Math.pow(
+    Math.max(0, Math.min(15, blockLight)) / 15.0,
+    1.25,
+  );
 
   // Color blending
   const skyR = skyNorm * 0.92;
   const skyG = skyNorm * 0.95;
-  const skyB = skyNorm * 1.00;
+  const skyB = skyNorm * 1.0;
 
-  const torchR = blockNorm * 1.00;
+  const torchR = blockNorm * 1.0;
   const torchG = blockNorm * 0.82;
   const torchB = blockNorm * 0.52;
 
@@ -143,7 +159,7 @@ export class LightManager {
     chunkData: Uint8Array,
     chunkLight: Uint8Array,
     chunkX: number,
-    chunkZ: number
+    chunkZ: number,
   ): void {
     const worldOffsetX = chunkX * CHUNK_SIZE_X;
     const worldOffsetZ = chunkZ * CHUNK_SIZE_Z;
@@ -188,7 +204,12 @@ export class LightManager {
           if (emission > 0) {
             const sky = unpackSky(chunkLight[idx]);
             chunkLight[idx] = packLight(sky, emission);
-            this.propagateBlockLightBFS(worldOffsetX + lx, y, worldOffsetZ + lz, emission);
+            this.propagateBlockLightBFS(
+              worldOffsetX + lx,
+              y,
+              worldOffsetZ + lz,
+              emission,
+            );
           }
         }
       }
@@ -198,16 +219,26 @@ export class LightManager {
   /**
    * BFS Flood-Fill: Places a light source (torch/lava) and spreads light up to 14 blocks with -1 decay.
    */
-  public propagateBlockLightBFS(startX: number, startY: number, startZ: number, startLight: number): void {
+  public propagateBlockLightBFS(
+    startX: number,
+    startY: number,
+    startZ: number,
+    startLight: number,
+  ): void {
     if (startY < 0 || startY >= CHUNK_SIZE_Y || startLight <= 0) return;
 
     // BFS Queue of [gx, gy, gz, lightLevel]
-    const queue: [number, number, number, number][] = [[startX, startY, startZ, startLight]];
+    const queue: [number, number, number, number][] = [
+      [startX, startY, startZ, startLight],
+    ];
 
     const DIRS = [
-      [1, 0, 0], [-1, 0, 0],
-      [0, 1, 0], [0, -1, 0],
-      [0, 0, 1], [0, 0, -1],
+      [1, 0, 0],
+      [-1, 0, 0],
+      [0, 1, 0],
+      [0, -1, 0],
+      [0, 0, 1],
+      [0, 0, -1],
     ];
 
     let head = 0;
@@ -235,7 +266,12 @@ export class LightManager {
           const currentBlock = unpackBlock(currentPacked);
 
           if (nextLight > currentBlock) {
-            this.access.setLightGlobal(nx, ny, nz, packLight(currentSky, nextLight));
+            this.access.setLightGlobal(
+              nx,
+              ny,
+              nz,
+              packLight(currentSky, nextLight),
+            );
             this.access.markChunkDirtyAt(nx, nz);
 
             if (nextLight > 1) {
@@ -251,7 +287,11 @@ export class LightManager {
    * BFS Light Removal Queue:
    * When a light source is destroyed (e.g. torch broken), clears the light and re-propagates remaining sources.
    */
-  public removeBlockLightBFS(startX: number, startY: number, startZ: number): void {
+  public removeBlockLightBFS(
+    startX: number,
+    startY: number,
+    startZ: number,
+  ): void {
     if (startY < 0 || startY >= CHUNK_SIZE_Y) return;
 
     const currentPacked = this.access.getLightGlobal(startX, startY, startZ);
@@ -265,13 +305,18 @@ export class LightManager {
     this.access.markChunkDirtyAt(startX, startZ);
 
     // Queue of [x, y, z, lightVal]
-    const removalQueue: [number, number, number, number][] = [[startX, startY, startZ, oldBlockLight]];
+    const removalQueue: [number, number, number, number][] = [
+      [startX, startY, startZ, oldBlockLight],
+    ];
     const recheckQueue: [number, number, number, number][] = [];
 
     const DIRS = [
-      [1, 0, 0], [-1, 0, 0],
-      [0, 1, 0], [0, -1, 0],
-      [0, 0, 1], [0, 0, -1],
+      [1, 0, 0],
+      [-1, 0, 0],
+      [0, 1, 0],
+      [0, -1, 0],
+      [0, 0, 1],
+      [0, 0, -1],
     ];
 
     let rHead = 0;

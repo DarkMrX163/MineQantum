@@ -1,4 +1,4 @@
-import * as THREE from 'three';
+import * as THREE from "three";
 
 const vertexShader = `
   uniform float u_time;
@@ -53,7 +53,9 @@ const fragmentShader = `
 /**
  * Creates custom ShaderMaterial for animated water with sine wave vertex displacement and 0.6 opacity
  */
-export function createWaterShaderMaterial(atlasTexture: THREE.CanvasTexture): THREE.ShaderMaterial {
+export function createWaterShaderMaterial(
+  atlasTexture: THREE.CanvasTexture,
+): THREE.ShaderMaterial {
   return new THREE.ShaderMaterial({
     uniforms: {
       u_time: { value: 0 },

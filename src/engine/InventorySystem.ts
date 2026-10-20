@@ -301,7 +301,7 @@ export const ITEM_REGISTRY: Record<string, ItemDefinition> = {
     id: 'crafting_table',
     name: 'Crafting Table',
     type: 'block',
-    blockId: BLOCK.PLANKS,
+    blockId: BLOCK.CRAFTING_TABLE,
     miningSpeedMultiplier: 1.0,
     maxStack: 64,
     color: '#b45309',
@@ -316,6 +316,56 @@ export const ITEM_REGISTRY: Record<string, ItemDefinition> = {
     maxStack: 64,
     color: '#475569',
     description: 'Smelting workstation.',
+  },
+  coal_ore: {
+    id: 'coal_ore',
+    name: 'Coal Ore',
+    type: 'block',
+    blockId: BLOCK.COAL_ORE,
+    miningSpeedMultiplier: 1.0,
+    maxStack: 64,
+    color: '#212121',
+    description: 'Found in stone underground.',
+  },
+  iron_ore: {
+    id: 'iron_ore',
+    name: 'Iron Ore',
+    type: 'block',
+    blockId: BLOCK.IRON_ORE,
+    miningSpeedMultiplier: 1.0,
+    maxStack: 64,
+    color: '#d4a373',
+    description: 'Valuable metal ore.',
+  },
+  gold_ore: {
+    id: 'gold_ore',
+    name: 'Gold Ore',
+    type: 'block',
+    blockId: BLOCK.GOLD_ORE,
+    miningSpeedMultiplier: 1.0,
+    maxStack: 64,
+    color: '#ffb703',
+    description: 'Shiny precious gold ore.',
+  },
+  diamond_ore: {
+    id: 'diamond_ore',
+    name: 'Diamond Ore',
+    type: 'block',
+    blockId: BLOCK.DIAMOND_ORE,
+    miningSpeedMultiplier: 1.0,
+    maxStack: 64,
+    color: '#48cae4',
+    description: 'Extremely rare gemstone ore.',
+  },
+  redstone_ore: {
+    id: 'redstone_ore',
+    name: 'Redstone Ore',
+    type: 'block',
+    blockId: BLOCK.REDSTONE_ORE,
+    miningSpeedMultiplier: 1.0,
+    maxStack: 64,
+    color: '#e63946',
+    description: 'Glowing magical ore.',
   },
 };
 
@@ -337,9 +387,8 @@ export const BLOCK_BREAK_RULES: Record<number, BlockBreakRule> = {
     blockId: BLOCK.STONE,
     baseHardness: 1.5,
     preferredTool: 'pickaxe',
-    requiresTool: true, // Hand breaks stone slowly and drops NOTHING!
-    minToolTier: 'wood',
-    dropItemId: 'cobblestone',
+    requiresTool: false,
+    dropItemId: 'stone',
     dropCount: 1,
   },
   [BLOCK.DIRT]: {
@@ -355,7 +404,7 @@ export const BLOCK_BREAK_RULES: Record<number, BlockBreakRule> = {
     baseHardness: 0.6,
     preferredTool: 'shovel',
     requiresTool: false,
-    dropItemId: 'dirt',
+    dropItemId: 'grass_block',
     dropCount: 1,
   },
   [BLOCK.WOOD]: {
@@ -378,7 +427,7 @@ export const BLOCK_BREAK_RULES: Record<number, BlockBreakRule> = {
     blockId: BLOCK.LEAVES,
     baseHardness: 0.2,
     requiresTool: false,
-    dropItemId: 'stick',
+    dropItemId: 'leaves',
     dropCount: 1,
   },
   [BLOCK.SAND]: {
@@ -393,8 +442,7 @@ export const BLOCK_BREAK_RULES: Record<number, BlockBreakRule> = {
     blockId: BLOCK.BRICK,
     baseHardness: 2.0,
     preferredTool: 'pickaxe',
-    requiresTool: true,
-    minToolTier: 'wood',
+    requiresTool: false,
     dropItemId: 'brick',
     dropCount: 1,
   },
@@ -402,14 +450,62 @@ export const BLOCK_BREAK_RULES: Record<number, BlockBreakRule> = {
     blockId: BLOCK.GLASS,
     baseHardness: 0.3,
     requiresTool: false,
-    dropItemId: null, // Glass shatters without drop
-    dropCount: 0,
+    dropItemId: 'glass',
+    dropCount: 1,
   },
   [BLOCK.TORCH]: {
     blockId: BLOCK.TORCH,
     baseHardness: 0.05,
     requiresTool: false,
     dropItemId: 'torch',
+    dropCount: 1,
+  },
+  [BLOCK.CRAFTING_TABLE]: {
+    blockId: BLOCK.CRAFTING_TABLE,
+    baseHardness: 1.5,
+    preferredTool: 'axe',
+    requiresTool: false,
+    dropItemId: 'crafting_table',
+    dropCount: 1,
+  },
+  [BLOCK.COAL_ORE]: {
+    blockId: BLOCK.COAL_ORE,
+    baseHardness: 2.0,
+    preferredTool: 'pickaxe',
+    requiresTool: false,
+    dropItemId: 'coal_ore',
+    dropCount: 1,
+  },
+  [BLOCK.IRON_ORE]: {
+    blockId: BLOCK.IRON_ORE,
+    baseHardness: 2.5,
+    preferredTool: 'pickaxe',
+    requiresTool: false,
+    dropItemId: 'iron_ore',
+    dropCount: 1,
+  },
+  [BLOCK.GOLD_ORE]: {
+    blockId: BLOCK.GOLD_ORE,
+    baseHardness: 3.0,
+    preferredTool: 'pickaxe',
+    requiresTool: false,
+    dropItemId: 'gold_ore',
+    dropCount: 1,
+  },
+  [BLOCK.DIAMOND_ORE]: {
+    blockId: BLOCK.DIAMOND_ORE,
+    baseHardness: 3.5,
+    preferredTool: 'pickaxe',
+    requiresTool: false,
+    dropItemId: 'diamond_ore',
+    dropCount: 1,
+  },
+  [BLOCK.REDSTONE_ORE]: {
+    blockId: BLOCK.REDSTONE_ORE,
+    baseHardness: 2.5,
+    preferredTool: 'pickaxe',
+    requiresTool: false,
+    dropItemId: 'redstone_ore',
     dropCount: 1,
   },
 };
@@ -892,8 +988,8 @@ export class DroppedItemManager {
       // Distance to player
       const distToPlayer = drop.position.distanceTo(playerTarget);
 
-      // Magnet check (< 1.8 blocks as specified)
-      if (distToPlayer < 2.0 && drop.age > 0.2) {
+      // Magnet check (< 4.5 blocks so items fly into player inventory)
+      if (distToPlayer < 4.5 && drop.age > 0.15) {
         drop.isMagnetized = true;
       }
 
@@ -902,13 +998,13 @@ export class DroppedItemManager {
         const pullDir = new THREE.Vector3()
           .subVectors(playerTarget, drop.position)
           .normalize();
-        const pullSpeed = Math.min(14.0, 5.0 + 8.0 * (1.0 / Math.max(0.2, distToPlayer)));
+        const pullSpeed = Math.min(18.0, 8.0 + 12.0 * (1.0 / Math.max(0.1, distToPlayer)));
 
-        drop.velocity.lerp(pullDir.multiplyScalar(pullSpeed), dt * 12.0);
+        drop.velocity.lerp(pullDir.multiplyScalar(pullSpeed), dt * 16.0);
         drop.position.addScaledVector(drop.velocity, dt);
 
-        // Picked up!
-        if (distToPlayer < 0.65) {
+        // Picked up into inventory!
+        if (distToPlayer < 1.2) {
           const collected = onCollect(drop.item);
           if (collected) {
             sound.playItemPickup();

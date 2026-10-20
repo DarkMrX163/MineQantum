@@ -1,8 +1,8 @@
-import * as THREE from 'three';
+import * as THREE from "three";
 
 /**
  * UV Box Mapping helper for standard Minecraft skin layouts (64x32 or 64x64).
- * 
+ *
  * Standard Minecraft skin box layout:
  * For a box of dimensions (dx, dy, dz):
  * The texture rectangle width = 2 * (dz + dx), height = dz + dy.
@@ -23,7 +23,20 @@ export interface SkinBoxUV {
   d: number; // dz (Z dimension)
 }
 
-export type EntityType = 'player' | 'zombie' | 'creeper';
+export type EntityType =
+  | "player"
+  | "alex"
+  | "miner"
+  | "knight"
+  | "engineer"
+  | "zombie"
+  | "creeper"
+  | "skeleton"
+  | "enderman"
+  | "cow"
+  | "sheep"
+  | "pig"
+  | "bird";
 
 export interface HumanoidParts {
   group: THREE.Group;
@@ -39,7 +52,8 @@ export interface HumanoidParts {
   rightArmMesh: THREE.Mesh;
   leftLegMesh: THREE.Mesh;
   rightLegMesh: THREE.Mesh;
-  type: 'player' | 'zombie';
+  type: "player" | "zombie" | "skeleton" | "enderman";
+  bowMesh?: THREE.Mesh;
 }
 
 export interface CreeperParts {
@@ -53,7 +67,25 @@ export interface CreeperParts {
   headMesh: THREE.Mesh;
   torsoMesh: THREE.Mesh;
   legMeshes: THREE.Mesh[];
-  type: 'creeper';
+  type: "creeper";
+}
+
+export interface QuadrupedParts {
+  group: THREE.Group;
+  head: THREE.Group;
+  torso: THREE.Group;
+  legFrontLeft: THREE.Group;
+  legFrontRight: THREE.Group;
+  legBackLeft: THREE.Group;
+  legBackRight: THREE.Group;
+  type: "cow" | "sheep" | "pig";
+}
+
+export interface BirdParts {
+  group: THREE.Group;
+  leftWing: THREE.Group;
+  rightWing: THREE.Group;
+  type: "bird";
 }
 
 export class EntityModelBuilder {
@@ -77,7 +109,7 @@ export class EntityModelBuilder {
     dy: number,
     dz: number,
     textureW: number = 64,
-    textureH: number = 64
+    textureH: number = 64,
   ): void {
     const uvAttr = geometry.attributes.uv;
     if (!uvAttr) return;
@@ -159,8 +191,20 @@ export class EntityModelBuilder {
     depth: number,
     pivotOffset: { x: number; y: number; z: number },
     material: THREE.Material,
-    uvInfo?: { u: number; v: number; dx: number; dy: number; dz: number; tw?: number; th?: number }
-  ): { pivotGroup: THREE.Group; mesh: THREE.Mesh; geometry: THREE.BoxGeometry } {
+    uvInfo?: {
+      u: number;
+      v: number;
+      dx: number;
+      dy: number;
+      dz: number;
+      tw?: number;
+      th?: number;
+    },
+  ): {
+    pivotGroup: THREE.Group;
+    mesh: THREE.Mesh;
+    geometry: THREE.BoxGeometry;
+  } {
     const geometry = new THREE.BoxGeometry(width, height, depth);
 
     if (uvInfo) {
@@ -172,7 +216,7 @@ export class EntityModelBuilder {
         uvInfo.dy,
         uvInfo.dz,
         uvInfo.tw || 64,
-        uvInfo.th || 64
+        uvInfo.th || 64,
       );
     }
 
@@ -199,8 +243,8 @@ export class EntityModelBuilder {
    */
   public static buildHumanoid(
     material: THREE.Material,
-    type: 'player' | 'zombie' = 'player',
-    scale: number = 1 / 16
+    type: "player" | "zombie" | "skeleton" | "enderman" = "player",
+    scale: number = 1 / 16,
   ): HumanoidParts {
     const root = new THREE.Group();
 
@@ -215,7 +259,7 @@ export class EntityModelBuilder {
       torsoD,
       { x: 0, y: torsoH / 2, z: 0 },
       material,
-      { u: 16, v: 16, dx: 8, dy: 12, dz: 4 }
+      { u: 16, v: 16, dx: 8, dy: 12, dz: 4 },
     );
     // Torso base is at hip level y = 12 * scale
     torsoGroup.position.set(0, 12 * scale, 0);
@@ -230,7 +274,7 @@ export class EntityModelBuilder {
       headSize,
       { x: 0, y: headSize / 2, z: 0 },
       material,
-      { u: 0, v: 0, dx: 8, dy: 8, dz: 8 }
+      { u: 0, v: 0, dx: 8, dy: 8, dz: 8 },
     );
     headGroup.position.set(0, 24 * scale, 0);
     root.add(headGroup);
@@ -241,28 +285,30 @@ export class EntityModelBuilder {
     const armH = 12 * scale;
     const armD = 4 * scale;
 
-    const { pivotGroup: rightArmGroup, mesh: rightArmMesh } = this.createPivotPart(
-      armW,
-      armH,
-      armD,
-      { x: 0, y: -armH / 2, z: 0 }, // Pivot at top
-      material,
-      { u: 40, v: 16, dx: 4, dy: 12, dz: 4 }
-    );
+    const { pivotGroup: rightArmGroup, mesh: rightArmMesh } =
+      this.createPivotPart(
+        armW,
+        armH,
+        armD,
+        { x: 0, y: -armH / 2, z: 0 }, // Pivot at top
+        material,
+        { u: 40, v: 16, dx: 4, dy: 12, dz: 4 },
+      );
     // Right shoulder position: -6 units X (4 torso + 2 half arm), 22 units Y
     rightArmGroup.position.set(-6 * scale, 22 * scale, 0);
     root.add(rightArmGroup);
 
     // 4. Left Arm: 4 x 12 x 4
     // Standard 64x64 skin: Left arm has UV at (32, 48), or mirroring (40, 16)
-    const { pivotGroup: leftArmGroup, mesh: leftArmMesh } = this.createPivotPart(
-      armW,
-      armH,
-      armD,
-      { x: 0, y: -armH / 2, z: 0 },
-      material,
-      { u: 32, v: 48, dx: 4, dy: 12, dz: 4 }
-    );
+    const { pivotGroup: leftArmGroup, mesh: leftArmMesh } =
+      this.createPivotPart(
+        armW,
+        armH,
+        armD,
+        { x: 0, y: -armH / 2, z: 0 },
+        material,
+        { u: 32, v: 48, dx: 4, dy: 12, dz: 4 },
+      );
     leftArmGroup.position.set(6 * scale, 22 * scale, 0);
     root.add(leftArmGroup);
 
@@ -272,32 +318,34 @@ export class EntityModelBuilder {
     const legH = 12 * scale;
     const legD = 4 * scale;
 
-    const { pivotGroup: rightLegGroup, mesh: rightLegMesh } = this.createPivotPart(
-      legW,
-      legH,
-      legD,
-      { x: 0, y: -legH / 2, z: 0 },
-      material,
-      { u: 0, v: 16, dx: 4, dy: 12, dz: 4 }
-    );
+    const { pivotGroup: rightLegGroup, mesh: rightLegMesh } =
+      this.createPivotPart(
+        legW,
+        legH,
+        legD,
+        { x: 0, y: -legH / 2, z: 0 },
+        material,
+        { u: 0, v: 16, dx: 4, dy: 12, dz: 4 },
+      );
     rightLegGroup.position.set(-2 * scale, 12 * scale, 0);
     root.add(rightLegGroup);
 
     // 6. Left Leg: 4 x 12 x 4
     // Standard 64x64 skin: Left leg at (16, 48)
-    const { pivotGroup: leftLegGroup, mesh: leftLegMesh } = this.createPivotPart(
-      legW,
-      legH,
-      legD,
-      { x: 0, y: -legH / 2, z: 0 },
-      material,
-      { u: 16, v: 48, dx: 4, dy: 12, dz: 4 }
-    );
+    const { pivotGroup: leftLegGroup, mesh: leftLegMesh } =
+      this.createPivotPart(
+        legW,
+        legH,
+        legD,
+        { x: 0, y: -legH / 2, z: 0 },
+        material,
+        { u: 16, v: 48, dx: 4, dy: 12, dz: 4 },
+      );
     leftLegGroup.position.set(2 * scale, 12 * scale, 0);
     root.add(leftLegGroup);
 
     // If Zombie: raise arms straight ahead in classic menacing posture
-    if (type === 'zombie') {
+    if (type === "zombie") {
       rightArmGroup.rotation.x = -Math.PI / 2;
       leftArmGroup.rotation.x = -Math.PI / 2;
     }
@@ -316,7 +364,7 @@ export class EntityModelBuilder {
       rightArmMesh,
       leftLegMesh,
       rightLegMesh,
-      type
+      type,
     };
   }
 
@@ -330,7 +378,7 @@ export class EntityModelBuilder {
    */
   public static buildCreeper(
     material: THREE.Material,
-    scale: number = 1 / 16
+    scale: number = 1 / 16,
   ): CreeperParts {
     const root = new THREE.Group();
 
@@ -345,7 +393,7 @@ export class EntityModelBuilder {
       torsoD,
       { x: 0, y: torsoH / 2, z: 0 },
       material,
-      { u: 16, v: 16, dx: 8, dy: 12, dz: 4 }
+      { u: 16, v: 16, dx: 8, dy: 12, dz: 4 },
     );
     // Base of torso sits atop legs at y = 6 * scale
     torsoGroup.position.set(0, 6 * scale, 0);
@@ -359,7 +407,7 @@ export class EntityModelBuilder {
       headSize,
       { x: 0, y: headSize / 2, z: 0 },
       material,
-      { u: 0, v: 0, dx: 8, dy: 8, dz: 8 }
+      { u: 0, v: 0, dx: 8, dy: 8, dz: 8 },
     );
     // Neck sits on top of torso at y = 18 * scale
     headGroup.position.set(0, 18 * scale, 0);
@@ -379,7 +427,7 @@ export class EntityModelBuilder {
         legD,
         { x: 0, y: -legH / 2, z: 0 }, // Pivot at top hip
         material,
-        { u: 0, v: 16, dx: 4, dy: 6, dz: 4 }
+        { u: 0, v: 16, dx: 4, dy: 6, dz: 4 },
       );
       pivotGroup.position.set(xPos, 6 * scale, zPos);
       root.add(pivotGroup);
@@ -407,7 +455,7 @@ export class EntityModelBuilder {
       headMesh,
       torsoMesh,
       legMeshes,
-      type: 'creeper'
+      type: "creeper",
     };
   }
 
@@ -420,13 +468,13 @@ export class EntityModelBuilder {
     parts: HumanoidParts,
     time: number,
     walkSpeed: number = 1.0,
-    maxAngle: number = 0.65
+    maxAngle: number = 0.65,
   ): void {
     if (walkSpeed < 0.01) {
       // Return smoothly to idle
       parts.leftLeg.rotation.x *= 0.85;
       parts.rightLeg.rotation.x *= 0.85;
-      if (parts.type === 'player') {
+      if (parts.type === "player") {
         parts.leftArm.rotation.x *= 0.85;
         parts.rightArm.rotation.x *= 0.85;
         parts.leftArm.rotation.z *= 0.85;
@@ -441,14 +489,14 @@ export class EntityModelBuilder {
     parts.rightLeg.rotation.x = swing;
     parts.leftLeg.rotation.x = -swing;
 
-    if (parts.type === 'player') {
+    if (parts.type === "player") {
       // Opposite arm swings with opposite leg (like real walking biomechanics)
       parts.leftArm.rotation.x = swing;
       parts.rightArm.rotation.x = -swing;
       // Slight natural arm swing outwards
       parts.leftArm.rotation.z = 0.05;
       parts.rightArm.rotation.z = -0.05;
-    } else if (parts.type === 'zombie') {
+    } else if (parts.type === "zombie") {
       // Zombie keeps arms raised forward (~ -PI/2) with eerie up-and-down twitching
       const twitch = Math.sin(time * 3.5) * 0.08 + Math.cos(time * 7.0) * 0.04;
       parts.leftArm.rotation.x = -Math.PI / 2 + twitch;
@@ -456,7 +504,8 @@ export class EntityModelBuilder {
     }
 
     // Gentle torso and head bounce
-    parts.torso.position.y = (12 + Math.abs(Math.sin(time * 8.0)) * 0.6) * (1 / 16);
+    parts.torso.position.y =
+      (12 + Math.abs(Math.sin(time * 8.0)) * 0.6) * (1 / 16);
   }
 
   /**
@@ -470,7 +519,7 @@ export class EntityModelBuilder {
     parts: CreeperParts,
     time: number,
     walkSpeed: number = 1.0,
-    fuseProgress: number = 0.0 // 0.0 = normal, 1.0 = about to explode
+    fuseProgress: number = 0.0, // 0.0 = normal, 1.0 = about to explode
   ): void {
     if (walkSpeed > 0.01) {
       const swing = Math.sin(time * 7.0) * 0.55 * Math.min(walkSpeed, 1.2);
@@ -488,10 +537,109 @@ export class EntityModelBuilder {
 
     // Creeper Swelling effect during fuse ignition
     if (fuseProgress > 0) {
-      const swellScale = 1.0 + fuseProgress * 0.28 + Math.sin(time * 24.0) * (fuseProgress * 0.08);
+      const swellScale =
+        1.0 +
+        fuseProgress * 0.28 +
+        Math.sin(time * 24.0) * (fuseProgress * 0.08);
       parts.group.scale.set(swellScale, swellScale * 1.1, swellScale);
     } else {
       parts.group.scale.set(1.0, 1.0, 1.0);
+    }
+  }
+
+  /**
+   * Builds Quadruped Animals (Cow, Sheep, Pig)
+   */
+  public static buildQuadruped(
+    material: THREE.Material,
+    type: "cow" | "sheep" | "pig" = "cow",
+    scale: number = 1 / 16,
+  ): QuadrupedParts {
+    const root = new THREE.Group();
+
+    // Dimensions in pixel units
+    const bodyW = 12 * scale;
+    const bodyH = 10 * scale;
+    const bodyD = 16 * scale;
+
+    const { pivotGroup: torsoGroup } = this.createPivotPart(
+      bodyW,
+      bodyH,
+      bodyD,
+      { x: 0, y: bodyH / 2, z: 0 },
+      material,
+      { u: 18, v: 4, dx: 12, dy: 10, dz: 16 },
+    );
+    torsoGroup.position.set(0, 8 * scale, 0);
+    root.add(torsoGroup);
+
+    // Head
+    const headW = 8 * scale;
+    const headH = 8 * scale;
+    const headD = 8 * scale;
+    const { pivotGroup: headGroup } = this.createPivotPart(
+      headW,
+      headH,
+      headD,
+      { x: 0, y: headH / 2, z: 0 },
+      material,
+      { u: 0, v: 0, dx: 8, dy: 8, dz: 8 },
+    );
+    headGroup.position.set(0, 12 * scale, 8 * scale);
+    root.add(headGroup);
+
+    // 4 Legs (4x8x4 each)
+    const legW = 4 * scale;
+    const legH = 8 * scale;
+    const legD = 4 * scale;
+
+    const createLeg = (x: number, z: number) => {
+      const { pivotGroup } = this.createPivotPart(
+        legW,
+        legH,
+        legD,
+        { x: 0, y: -legH / 2, z: 0 },
+        material,
+        { u: 0, v: 16, dx: 4, dy: 8, dz: 4 },
+      );
+      pivotGroup.position.set(x, 8 * scale, z);
+      root.add(pivotGroup);
+      return pivotGroup;
+    };
+
+    const legFL = createLeg(-4 * scale, 6 * scale);
+    const legFR = createLeg(4 * scale, 6 * scale);
+    const legBL = createLeg(-4 * scale, -6 * scale);
+    const legBR = createLeg(4 * scale, -6 * scale);
+
+    return {
+      group: root,
+      head: headGroup,
+      torso: torsoGroup,
+      legFrontLeft: legFL,
+      legFrontRight: legFR,
+      legBackLeft: legBL,
+      legBackRight: legBR,
+      type,
+    };
+  }
+
+  public static animateQuadrupedWalk(
+    parts: QuadrupedParts,
+    time: number,
+    walkSpeed: number = 1.0,
+  ): void {
+    if (walkSpeed > 0.01) {
+      const swing = Math.sin(time * 7.0) * 0.5 * Math.min(walkSpeed, 1.2);
+      parts.legFrontRight.rotation.x = swing;
+      parts.legBackLeft.rotation.x = swing;
+      parts.legFrontLeft.rotation.x = -swing;
+      parts.legBackRight.rotation.x = -swing;
+    } else {
+      parts.legFrontRight.rotation.x *= 0.85;
+      parts.legBackLeft.rotation.x *= 0.85;
+      parts.legFrontLeft.rotation.x *= 0.85;
+      parts.legBackRight.rotation.x *= 0.85;
     }
   }
 
@@ -500,10 +648,10 @@ export class EntityModelBuilder {
    * with authentic pixel textures for standard UV unwrap!
    */
   public static createSkinCanvas(type: EntityType): HTMLCanvasElement {
-    const canvas = document.createElement('canvas');
+    const canvas = document.createElement("canvas");
     canvas.width = 64;
     canvas.height = 64;
-    const ctx = canvas.getContext('2d');
+    const ctx = canvas.getContext("2d");
     if (!ctx) return canvas;
 
     // Clear background
@@ -518,7 +666,7 @@ export class EntityModelBuilder {
       baseR: number,
       baseG: number,
       baseB: number,
-      noise: number = 10
+      noise: number = 10,
     ) => {
       for (let px = x; px < x + w; px++) {
         for (let py = y; py < y + h; py++) {
@@ -532,7 +680,7 @@ export class EntityModelBuilder {
       }
     };
 
-    if (type === 'player') {
+    if (type === "player") {
       // Classic Steve style
       // Head: Skin tone (205, 150, 115)
       fillPixelRect(0, 0, 32, 16, 205, 150, 115, 12);
@@ -541,16 +689,16 @@ export class EntityModelBuilder {
       fillPixelRect(0, 8, 32, 3, 70, 45, 25, 8); // Hair fringe
       // Face details at Front face: x=8, y=8, w=8, h=8
       // Eyes at (10, 10) and (13, 10)
-      ctx.fillStyle = '#ffffff';
+      ctx.fillStyle = "#ffffff";
       ctx.fillRect(10, 10, 2, 1);
       ctx.fillRect(13, 10, 2, 1);
-      ctx.fillStyle = '#2c4391'; // Blue iris
+      ctx.fillStyle = "#2c4391"; // Blue iris
       ctx.fillRect(11, 10, 1, 1);
       ctx.fillRect(13, 10, 1, 1);
       // Nose / mouth
-      ctx.fillStyle = '#8f4f34';
+      ctx.fillStyle = "#8f4f34";
       ctx.fillRect(11, 12, 2, 1); // mouth/beard
-      ctx.fillStyle = '#b87556';
+      ctx.fillStyle = "#b87556";
       ctx.fillRect(11, 11, 2, 1); // nose
 
       // Torso: Cyan Shirt (0, 160, 175)
@@ -569,18 +717,18 @@ export class EntityModelBuilder {
       fillPixelRect(0, 28, 16, 4, 80, 80, 85, 8); // shoes
       fillPixelRect(16, 48, 16, 12, 45, 65, 135, 12);
       fillPixelRect(16, 60, 16, 4, 80, 80, 85, 8); // shoes
-    } else if (type === 'zombie') {
+    } else if (type === "zombie") {
       // Zombie style: Rotten Green Skin (85, 140, 65), Tattered Cyan Shirt, Purple/Dark Blue Pants
       fillPixelRect(0, 0, 32, 16, 85, 140, 65, 14);
       // Dark green/mossy hair
       fillPixelRect(8, 0, 8, 8, 40, 75, 30, 8);
       fillPixelRect(0, 8, 32, 3, 40, 75, 30, 8);
       // Zombie hollow black eyes at (10, 10) and (13, 10)
-      ctx.fillStyle = '#0a1005';
+      ctx.fillStyle = "#0a1005";
       ctx.fillRect(10, 10, 2, 1);
       ctx.fillRect(13, 10, 2, 1);
       // Nose
-      ctx.fillStyle = '#487d33';
+      ctx.fillStyle = "#487d33";
       ctx.fillRect(11, 11, 2, 1);
 
       // Torso: Cyan Shirt (tattered)
@@ -595,22 +743,115 @@ export class EntityModelBuilder {
       // Legs: Dark Purple/Indigo pants (55, 45, 85)
       fillPixelRect(0, 16, 16, 16, 55, 45, 85, 10);
       fillPixelRect(16, 48, 16, 16, 55, 45, 85, 10);
-    } else if (type === 'creeper') {
+    } else if (type === "creeper") {
       // Creeper: Mottled pixelated camouflage green texture everywhere!
       fillPixelRect(0, 0, 64, 64, 75, 165, 60, 25);
 
       // Iconic Creeper Face on Front of Head: x=8, y=8, w=8, h=8
-      ctx.fillStyle = '#000000';
-      // Eyes (2x2 each): at (9, 10) and (13, 10)
+      ctx.fillStyle = "#000000";
       ctx.fillRect(9, 10, 2, 2);
       ctx.fillRect(13, 10, 2, 2);
-      // Nose/mouth stem: at (11, 12, 2, 3)
       ctx.fillRect(11, 12, 2, 3);
-      // Mouth sides:
       ctx.fillRect(10, 13, 1, 3);
       ctx.fillRect(13, 13, 1, 3);
       ctx.fillRect(9, 14, 1, 2);
       ctx.fillRect(14, 14, 1, 2);
+    } else if (type === "skeleton") {
+      // Skeleton: Bone white texture with dark eye sockets
+      fillPixelRect(0, 0, 64, 64, 215, 218, 222, 12);
+      // Dark eye sockets & nasal cavity
+      ctx.fillStyle = "#262626";
+      ctx.fillRect(9, 9, 3, 3);
+      ctx.fillRect(14, 9, 3, 3);
+      ctx.fillRect(12, 12, 2, 2);
+      // Teeth line
+      ctx.fillRect(10, 14, 6, 1);
+      // Ribcage on torso
+      ctx.fillRect(20, 18, 8, 1);
+      ctx.fillRect(20, 20, 8, 1);
+      ctx.fillRect(20, 22, 8, 1);
+      ctx.fillRect(23, 23, 2, 5);
+    } else if (type === "enderman") {
+      // Enderman: Pitch dark violet/charcoal texture with glowing purple eyes
+      fillPixelRect(0, 0, 64, 64, 16, 14, 22, 8);
+      // Glowing Magenta/Purple eyes: x=8, y=8, w=8, h=8
+      ctx.fillStyle = "#c084fc"; // Purple glow
+      ctx.fillRect(8, 10, 4, 1);
+      ctx.fillRect(14, 10, 4, 1);
+      ctx.fillStyle = "#e9d5ff"; // Bright white/pink core
+      ctx.fillRect(9, 10, 2, 1);
+      ctx.fillRect(15, 10, 2, 1);
+    } else if (type === "cow") {
+      // Cow: Dark brown with white spots
+      fillPixelRect(0, 0, 64, 64, 90, 65, 45, 15);
+      // White patches
+      fillPixelRect(16, 16, 12, 10, 240, 240, 240, 5);
+      fillPixelRect(32, 20, 10, 8, 240, 240, 240, 5);
+      fillPixelRect(0, 8, 8, 6, 240, 240, 240, 5);
+      // Eyes & Snout
+      ctx.fillStyle = "#000000";
+      ctx.fillRect(9, 10, 2, 1);
+      ctx.fillRect(14, 10, 2, 1);
+      ctx.fillStyle = "#f43f5e"; // Pink snout
+      ctx.fillRect(10, 12, 5, 2);
+    } else if (type === "sheep") {
+      // Sheep: Cream white fluffy wool
+      fillPixelRect(0, 0, 64, 64, 235, 235, 230, 10);
+      // Pink face
+      fillPixelRect(0, 8, 16, 8, 240, 180, 170, 8);
+      ctx.fillStyle = "#000000";
+      ctx.fillRect(3, 11, 2, 1);
+      ctx.fillRect(10, 11, 2, 1);
+    } else if (type === "pig") {
+      // Pig: Pink skin
+      fillPixelRect(0, 0, 64, 64, 245, 165, 165, 12);
+      // Snout
+      fillPixelRect(10, 12, 6, 3, 220, 120, 130, 8);
+      ctx.fillStyle = "#000000";
+      ctx.fillRect(11, 13, 1, 1);
+      ctx.fillRect(14, 13, 1, 1);
+      // Eyes
+      ctx.fillRect(8, 10, 2, 1);
+      ctx.fillRect(15, 10, 2, 1);
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(7, 10, 1, 1);
+      ctx.fillRect(14, 10, 1, 1);
+    } else if (type === "alex") {
+      // Alex: Orange hair, green tunic, beige trousers
+      fillPixelRect(0, 0, 32, 16, 215, 160, 125, 10);
+      fillPixelRect(8, 0, 8, 8, 210, 110, 30, 8); // Orange hair
+      fillPixelRect(16, 16, 24, 16, 45, 155, 85, 10); // Green tunic
+      fillPixelRect(40, 16, 16, 16, 215, 160, 125, 10);
+      fillPixelRect(0, 16, 16, 16, 130, 110, 85, 10); // Brown pants
+    } else if (type === "miner") {
+      // Miner: Yellow hard hat with lamp, grey work shirt, utility belt
+      fillPixelRect(0, 0, 32, 16, 195, 140, 105, 10);
+      fillPixelRect(6, 0, 12, 5, 235, 195, 45, 6); // Hard hat
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(11, 1, 2, 2); // Lamp glow
+      fillPixelRect(16, 16, 24, 16, 110, 115, 125, 12); // Grey shirt
+      fillPixelRect(40, 16, 16, 16, 195, 140, 105, 10);
+      fillPixelRect(0, 16, 16, 16, 50, 60, 75, 10); // Dark pants
+    } else if (type === "knight") {
+      // Knight: Steel armor plate, helmet with visor
+      fillPixelRect(0, 0, 32, 16, 150, 160, 175, 10);
+      fillPixelRect(8, 0, 8, 8, 110, 120, 135, 8); // Steel helmet
+      ctx.fillStyle = "#1a1a1a";
+      ctx.fillRect(10, 10, 4, 1); // Visor slit
+      fillPixelRect(16, 16, 24, 16, 130, 140, 155, 12); // Armor plate
+      fillPixelRect(40, 16, 16, 16, 110, 120, 135, 10); // Armored sleeves
+      fillPixelRect(0, 16, 16, 16, 70, 80, 95, 10); // Steel greaves
+    } else if (type === "engineer") {
+      // Engineer: Goggles, orange jumpsuit, tool pouch
+      fillPixelRect(0, 0, 32, 16, 210, 150, 120, 10);
+      ctx.fillStyle = "#222222";
+      ctx.fillRect(9, 9, 6, 2); // Goggles band
+      ctx.fillStyle = "#67e8f9"; // Goggle lenses
+      ctx.fillRect(10, 9, 2, 2);
+      ctx.fillRect(13, 9, 2, 2);
+      fillPixelRect(16, 16, 24, 16, 225, 115, 35, 12); // Orange jumpsuit
+      fillPixelRect(40, 16, 16, 16, 210, 150, 120, 10);
+      fillPixelRect(0, 16, 16, 16, 180, 90, 20, 10); // Brown pants
     }
 
     return canvas;
@@ -629,16 +870,94 @@ export class EntityModelBuilder {
     return texture;
   }
 
-  /**
-   * Creates a MeshLambertMaterial with the mob's skin texture
-   */
   public static createMobMaterial(type: EntityType): THREE.MeshLambertMaterial {
     const texture = this.createSkinTexture(type);
-    return new THREE.MeshLambertMaterial({
-      map: texture,
-      transparent: false,
-      wireframe: false
-    });
+    return new THREE.MeshLambertMaterial({ map: texture });
+  }
+
+  /**
+   * Builds a Bird model
+   */
+  public static buildBird(
+    material: THREE.Material,
+    scale: number = 1 / 16,
+  ): BirdParts {
+    const group = new THREE.Group();
+    // Body: 4 x 3 x 6 pixels
+    const bodyGeo = new THREE.BoxGeometry(4 * scale, 3 * scale, 6 * scale);
+    const bodyMesh = new THREE.Mesh(bodyGeo, material);
+    bodyMesh.position.set(0, 1.5 * scale, 0);
+    group.add(bodyMesh);
+
+    // Head: 3 x 3 x 3 pixels
+    const headGeo = new THREE.BoxGeometry(3 * scale, 3 * scale, 3 * scale);
+    const headMesh = new THREE.Mesh(headGeo, material);
+    headMesh.position.set(0, 3 * scale, 3.5 * scale);
+    group.add(headMesh);
+
+    // Left Wing pivot
+    const lwGroup = new THREE.Group();
+    lwGroup.position.set(2 * scale, 2 * scale, 0);
+    const lwGeo = new THREE.BoxGeometry(6 * scale, 0.5 * scale, 4 * scale);
+    const lwMesh = new THREE.Mesh(lwGeo, material);
+    lwMesh.position.set(3 * scale, 0, 0);
+    lwGroup.add(lwMesh);
+    group.add(lwGroup);
+
+    // Right Wing pivot
+    const rwGroup = new THREE.Group();
+    rwGroup.position.set(-2 * scale, 2 * scale, 0);
+    const rwGeo = new THREE.BoxGeometry(6 * scale, 0.5 * scale, 4 * scale);
+    const rwMesh = new THREE.Mesh(rwGeo, material);
+    rwMesh.position.set(-3 * scale, 0, 0);
+    rwGroup.add(rwMesh);
+    group.add(rwGroup);
+
+    return { group, leftWing: lwGroup, rightWing: rwGroup, type: "bird" };
+  }
+
+  public static animateBirdFlight(parts: BirdParts, time: number): void {
+    const flap = Math.sin(time * 18) * 0.9;
+    parts.leftWing.rotation.z = flap;
+    parts.rightWing.rotation.z = -flap;
+  }
+
+  /**
+   * Builds a detailed Steve companion model with backpack and handheld pickaxe/torch
+   */
+  public static buildSteveCompanion(
+    material: THREE.Material,
+    scale: number = 1 / 16,
+  ): HumanoidParts {
+    const parts = this.buildHumanoid(material, "player", scale);
+
+    // Add backpack to torso back
+    const backpackGeo = new THREE.BoxGeometry(6 * scale, 8 * scale, 3 * scale);
+    const backpackMat = new THREE.MeshLambertMaterial({ color: 0x5c4033 }); // Leather brown
+    const backpackMesh = new THREE.Mesh(backpackGeo, backpackMat);
+    backpackMesh.position.set(0, 6 * scale, -3.5 * scale);
+    backpackMesh.castShadow = true;
+    parts.torso.add(backpackMesh);
+
+    // Add mining pickaxe in right hand
+    const toolGroup = new THREE.Group();
+    const handleGeo = new THREE.BoxGeometry(1 * scale, 10 * scale, 1 * scale);
+    const handleMat = new THREE.MeshLambertMaterial({ color: 0x8b5a2b });
+    const handleMesh = new THREE.Mesh(handleGeo, handleMat);
+    handleMesh.position.set(0, -5 * scale, 0);
+    toolGroup.add(handleMesh);
+
+    const headGeo = new THREE.BoxGeometry(4 * scale, 3 * scale, 2 * scale);
+    const headMat = new THREE.MeshLambertMaterial({ color: 0x94a3b8 }); // Iron head
+    const pickHeadMesh = new THREE.Mesh(headGeo, headMat);
+    pickHeadMesh.position.set(0, -1 * scale, 1.5 * scale);
+    toolGroup.add(pickHeadMesh);
+
+    toolGroup.position.set(0, -10 * scale, 2 * scale);
+    toolGroup.rotation.x = Math.PI / 6;
+    parts.rightArm.add(toolGroup);
+
+    return parts;
   }
 }
 
@@ -658,8 +977,13 @@ export class HumanoidModel extends THREE.Group {
   constructor(options: { isZombie?: boolean; material?: THREE.Material } = {}) {
     super();
     this.isZombie = !!options.isZombie;
-    const mat = options.material || EntityModelBuilder.createMobMaterial(this.isZombie ? 'zombie' : 'player');
-    this.parts = EntityModelBuilder.buildHumanoid(mat, this.isZombie ? 'zombie' : 'player');
+    const mat =
+      options.material ||
+      EntityModelBuilder.createMobMaterial(this.isZombie ? "zombie" : "player");
+    this.parts = EntityModelBuilder.buildHumanoid(
+      mat,
+      this.isZombie ? "zombie" : "player",
+    );
     this.head = this.parts.head;
     this.torso = this.parts.torso;
     this.leftArm = this.parts.leftArm;
@@ -669,8 +993,16 @@ export class HumanoidModel extends THREE.Group {
     this.add(this.parts.group);
   }
 
-  public animateWalk(time: number, speed: number = 1.0, isMoving: boolean = true): void {
-    EntityModelBuilder.animateHumanoidWalk(this.parts, time, isMoving ? speed : 0.0);
+  public animateWalk(
+    time: number,
+    speed: number = 1.0,
+    isMoving: boolean = true,
+  ): void {
+    EntityModelBuilder.animateHumanoidWalk(
+      this.parts,
+      time,
+      isMoving ? speed : 0.0,
+    );
   }
 
   public setLookDirection(yaw: number, pitch: number): void {
@@ -689,23 +1021,33 @@ export class CreeperModel extends THREE.Group {
 
   constructor(options: { material?: THREE.Material } = {}) {
     super();
-    const mat = options.material || EntityModelBuilder.createMobMaterial('creeper');
+    const mat =
+      options.material || EntityModelBuilder.createMobMaterial("creeper");
     this.parts = EntityModelBuilder.buildCreeper(mat);
     this.head = this.parts.head;
     this.torso = this.parts.torso;
     this.add(this.parts.group);
   }
 
-  public animateWalk(time: number, speed: number = 1.0, isMoving: boolean = true): void {
-    EntityModelBuilder.animateCreeperWalk(this.parts, time, isMoving ? speed : 0.0);
+  public animateWalk(
+    time: number,
+    speed: number = 1.0,
+    isMoving: boolean = true,
+  ): void {
+    EntityModelBuilder.animateCreeperWalk(
+      this.parts,
+      time,
+      isMoving ? speed : 0.0,
+    );
   }
 }
 
 // Enhance EntityModelBuilder with overload helpers returning HumanoidModel/CreeperModel directly
-(EntityModelBuilder as any).buildHumanoidModel = function(options?: { isZombie?: boolean }) {
+(EntityModelBuilder as any).buildHumanoidModel = function (options?: {
+  isZombie?: boolean;
+}) {
   return new HumanoidModel(options);
 };
-(EntityModelBuilder as any).buildCreeperModel = function() {
+(EntityModelBuilder as any).buildCreeperModel = function () {
   return new CreeperModel();
 };
-

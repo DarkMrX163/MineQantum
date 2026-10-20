@@ -1,19 +1,23 @@
-import * as THREE from 'three';
-import { PointerLockControls } from 'three/examples/jsm/controls/PointerLockControls.js';
-import { ChunkManager } from './ChunkManager';
-import { BLOCK, BLOCK_DEFS } from './types';
-import { sound } from './AudioEngine';
-import { NetworkManager } from './NetworkManager';
-import { SlotItem, ITEM_REGISTRY, calculateBlockBreaking } from './InventorySystem';
+import * as THREE from "three";
+import { PointerLockControls } from "three/examples/jsm/controls/PointerLockControls.js";
+import { ChunkManager } from "./ChunkManager";
+import { BLOCK, BLOCK_DEFS } from "./types";
+import { sound } from "./AudioEngine";
+import { NetworkManager } from "./NetworkManager";
+import {
+  SlotItem,
+  ITEM_REGISTRY,
+  calculateBlockBreaking,
+} from "./InventorySystem";
 
 export interface FirstPersonControllerOptions {
-  moveSpeed?: number;      // Default: 6.0 m/s
-  flySpeed?: number;       // Default: 14.0 m/s
-  jumpForce?: number;      // Default: 8.5 m/s
-  gravity?: number;        // Default: 26.0 m/s^2
-  playerWidth?: number;    // Default: 0.6 m
-  playerHeight?: number;   // Default: 1.8 m
-  eyeHeight?: number;      // Default: 1.62 m
+  moveSpeed?: number; // Default: 6.0 m/s
+  flySpeed?: number; // Default: 14.0 m/s
+  jumpForce?: number; // Default: 8.5 m/s
+  gravity?: number; // Default: 26.0 m/s^2
+  playerWidth?: number; // Default: 0.6 m
+  playerHeight?: number; // Default: 1.8 m
+  eyeHeight?: number; // Default: 1.62 m
 }
 
 export class FirstPersonController {
@@ -67,12 +71,18 @@ export class FirstPersonController {
     pos: THREE.Vector3,
     canHarvest: boolean,
     dropItemId: string | null,
-    dropCount: number
+    dropCount: number,
   ) => void;
   public onBlockPlaced?: (blockId: number, pos: THREE.Vector3) => void;
   public onToolUsed?: () => void;
-  public onBreakingProgressChange?: (progress: number, pos: THREE.Vector3 | null) => void;
-  public onTakeDamage?: (amount: number, reason: 'fall' | 'lava' | 'mob' | 'starvation') => void;
+  public onBreakingProgressChange?: (
+    progress: number,
+    pos: THREE.Vector3 | null,
+  ) => void;
+  public onTakeDamage?: (
+    amount: number,
+    reason: "fall" | "lava" | "mob" | "starvation",
+  ) => void;
   public onSprintStateChange?: (isSprinting: boolean) => void;
   public onAttackMobRequest?: () => boolean;
   public onEatFood?: (item: SlotItem) => void;
@@ -83,7 +93,7 @@ export class FirstPersonController {
     domElement: HTMLElement,
     chunkManager: ChunkManager,
     scene: THREE.Scene,
-    options: FirstPersonControllerOptions = {}
+    options: FirstPersonControllerOptions = {},
   ) {
     this.camera = camera;
     this.chunkManager = chunkManager;
@@ -103,11 +113,11 @@ export class FirstPersonController {
   }
 
   private initListeners(domElement: HTMLElement): void {
-    window.addEventListener('keydown', (e) => {
+    window.addEventListener("keydown", (e) => {
       this.keys[e.code] = true;
 
       // Sprinting: Double-tap 'KeyW' within 280ms or holding Control
-      if (e.code === 'KeyW') {
+      if (e.code === "KeyW") {
         const now = performance.now();
         if (now - this.lastWPressTime < 280 && this.canSprint) {
           this.isSprinting = true;
@@ -115,25 +125,25 @@ export class FirstPersonController {
         }
         this.lastWPressTime = now;
       }
-      if (e.code === 'ControlLeft' && this.canSprint) {
+      if (e.code === "ControlLeft" && this.canSprint) {
         this.isSprinting = true;
         this.onSprintStateChange?.(true);
       }
 
       // Toggle fly mode with 'F' key
-      if (e.code === 'KeyF') {
+      if (e.code === "KeyF") {
         this.isFlying = !this.isFlying;
         this.velocity.set(0, 0, 0);
       }
     });
 
-    window.addEventListener('keyup', (e) => {
+    window.addEventListener("keyup", (e) => {
       this.keys[e.code] = false;
-      if (e.code === 'KeyW') {
+      if (e.code === "KeyW") {
         this.isSprinting = false;
         this.onSprintStateChange?.(false);
       }
-      if (e.code === 'ControlLeft') {
+      if (e.code === "ControlLeft") {
         this.isSprinting = false;
         this.onSprintStateChange?.(false);
       }
@@ -143,7 +153,7 @@ export class FirstPersonController {
     let prevMouseX = 0;
     let prevMouseY = 0;
 
-    domElement.addEventListener('mousedown', (e) => {
+    domElement.addEventListener("mousedown", (e) => {
       isDragging = true;
       prevMouseX = e.clientX;
       prevMouseY = e.clientY;
@@ -155,7 +165,7 @@ export class FirstPersonController {
       }
     });
 
-    window.addEventListener('mouseup', (e) => {
+    window.addEventListener("mouseup", (e) => {
       isDragging = false;
       if (e.button === 0) {
         this.isLMBDown = false;
@@ -163,7 +173,7 @@ export class FirstPersonController {
       }
     });
 
-    window.addEventListener('mousemove', (e) => {
+    window.addEventListener("mousemove", (e) => {
       if (!this.controls.isLocked && isDragging) {
         const dx = e.clientX - prevMouseX;
         const dy = e.clientY - prevMouseY;
@@ -194,7 +204,7 @@ export class FirstPersonController {
    * Rotates camera via touch swipe (deltaYaw horizontal, deltaPitch vertical)
    */
   public rotateCamera(deltaYaw: number, deltaPitch: number): void {
-    const euler = new THREE.Euler(0, 0, 0, 'YXZ');
+    const euler = new THREE.Euler(0, 0, 0, "YXZ");
     euler.setFromQuaternion(this.camera.quaternion);
 
     euler.y -= deltaYaw;
@@ -227,10 +237,10 @@ export class FirstPersonController {
     const inputDir = new THREE.Vector3(0, 0, 0);
 
     // Keyboard WASD
-    if (this.keys['KeyW']) inputDir.add(forward);
-    if (this.keys['KeyS']) inputDir.sub(forward);
-    if (this.keys['KeyD']) inputDir.add(right);
-    if (this.keys['KeyA']) inputDir.sub(right);
+    if (this.keys["KeyW"]) inputDir.add(forward);
+    if (this.keys["KeyS"]) inputDir.sub(forward);
+    if (this.keys["KeyD"]) inputDir.add(right);
+    if (this.keys["KeyA"]) inputDir.sub(right);
 
     // Touch Virtual Joystick input
     if (this.touchMoveVector.y !== 0) {
@@ -248,12 +258,12 @@ export class FirstPersonController {
     const feetBlock = this.chunkManager.getBlockGlobal(
       Math.floor(this.position.x),
       Math.floor(this.position.y),
-      Math.floor(this.position.z)
+      Math.floor(this.position.z),
     );
     const waistBlock = this.chunkManager.getBlockGlobal(
       Math.floor(this.position.x),
       Math.floor(this.position.y + 0.8),
-      Math.floor(this.position.z)
+      Math.floor(this.position.z),
     );
     const isInWater = waistBlock === BLOCK.WATER || feetBlock === BLOCK.WATER;
     const isInLava = waistBlock === BLOCK.LAVA || feetBlock === BLOCK.LAVA;
@@ -263,7 +273,7 @@ export class FirstPersonController {
       this.lavaDamageTimer += dt;
       if (this.lavaDamageTimer >= 0.8) {
         this.lavaDamageTimer = 0;
-        this.onTakeDamage?.(2, 'lava');
+        this.onTakeDamage?.(2, "lava");
       }
     } else {
       this.lavaDamageTimer = 0.6;
@@ -284,20 +294,23 @@ export class FirstPersonController {
 
     // Sprinting speed boost (1.35x when double-tapping W and moving)
     const isMovingHoriz = inputDir.lengthSq() > 0;
-    const isActuallySprinting = this.isSprinting && this.canSprint && isMovingHoriz && !isInWater;
+    const isActuallySprinting =
+      this.isSprinting && this.canSprint && isMovingHoriz && !isInWater;
     const sprintMult = isActuallySprinting ? 1.35 : 1.0;
 
     const currentSpeed = this.isFlying
       ? this.flySpeed
-      : (isInWater ? this.moveSpeed * 0.75 : this.moveSpeed * sprintMult);
+      : isInWater
+        ? this.moveSpeed * 0.75
+        : this.moveSpeed * sprintMult;
 
     if (this.isFlying) {
       // Free flying movement
       this.velocity.x = inputDir.x * currentSpeed;
       this.velocity.z = inputDir.z * currentSpeed;
 
-      if (this.keys['Space']) this.velocity.y = currentSpeed;
-      else if (this.keys['ShiftLeft']) this.velocity.y = -currentSpeed;
+      if (this.keys["Space"]) this.velocity.y = currentSpeed;
+      else if (this.keys["ShiftLeft"]) this.velocity.y = -currentSpeed;
       else this.velocity.y = 0;
 
       this.position.x += this.velocity.x * dt;
@@ -308,10 +321,10 @@ export class FirstPersonController {
       this.velocity.x = inputDir.x * currentSpeed;
       this.velocity.z = inputDir.z * currentSpeed;
 
-      if (this.keys['Space'] || this.touchJumpRequested) {
+      if (this.keys["Space"] || this.touchJumpRequested) {
         this.velocity.y = 4.5;
         this.touchJumpRequested = false;
-      } else if (this.keys['ShiftLeft']) {
+      } else if (this.keys["ShiftLeft"]) {
         this.velocity.y = -4.5;
       } else {
         // Subtle buoyancy float
@@ -328,7 +341,7 @@ export class FirstPersonController {
       this.velocity.y -= this.gravity * dt;
 
       // Jump
-      if ((this.keys['Space'] || this.touchJumpRequested) && this.isGrounded) {
+      if ((this.keys["Space"] || this.touchJumpRequested) && this.isGrounded) {
         this.velocity.y = this.jumpForce;
         this.isGrounded = false;
         this.touchJumpRequested = false;
@@ -336,7 +349,11 @@ export class FirstPersonController {
       }
 
       // Footstep audio
-      if (this.isGrounded && (this.velocity.x !== 0 || this.velocity.z !== 0) && Math.random() < 0.04) {
+      if (
+        this.isGrounded &&
+        (this.velocity.x !== 0 || this.velocity.z !== 0) &&
+        Math.random() < 0.04
+      ) {
         sound.playFootstep();
       }
 
@@ -348,19 +365,19 @@ export class FirstPersonController {
     this.camera.position.set(
       this.position.x,
       this.position.y + this.eyeHeight,
-      this.position.z
+      this.position.z,
     );
 
     // Send networked position to server (throttled inside NetworkManager)
     if (this.netManager) {
-      const euler = new THREE.Euler(0, 0, 0, 'YXZ');
+      const euler = new THREE.Euler(0, 0, 0, "YXZ");
       euler.setFromQuaternion(this.camera.quaternion);
       this.netManager.sendPosition(
         this.position.x,
         this.position.y,
         this.position.z,
         euler.y,
-        euler.x
+        euler.x,
       );
     }
 
@@ -399,7 +416,7 @@ export class FirstPersonController {
           if (fallDistance > 3.0) {
             const fallDamage = Math.floor(fallDistance - 3.0);
             if (fallDamage > 0 && this.onTakeDamage) {
-              this.onTakeDamage(fallDamage, 'fall');
+              this.onTakeDamage(fallDamage, "fall");
             }
           }
         }
@@ -459,7 +476,28 @@ export class FirstPersonController {
   }
 
   /**
-   * Returns true if any solid (non-air, non-transparent) voxel exists in specified bounding box area
+   * Checks if a block ID is solid for player physics collisions.
+   * Leaves, Glass, Wood, Dirt, Stone, Planks, Bricks are solid.
+   * Air, Water, Torch, Lava are non-solid (walk-through/passable).
+   */
+  public isSolidBlock(blockId: number): boolean {
+    if (
+      blockId === BLOCK.AIR ||
+      blockId === BLOCK.WATER ||
+      blockId === BLOCK.TORCH ||
+      blockId === BLOCK.LAVA
+    ) {
+      return false;
+    }
+    const def = BLOCK_DEFS[blockId];
+    if (def && def.solid === false) {
+      return false;
+    }
+    return true;
+  }
+
+  /**
+   * Returns true if any solid voxel exists in specified bounding box area
    */
   private hasSolidInArea(
     minX: number,
@@ -467,17 +505,14 @@ export class FirstPersonController {
     minY: number,
     maxY: number,
     minZ: number,
-    maxZ: number
+    maxZ: number,
   ): boolean {
     for (let x = minX; x <= maxX; x++) {
       for (let y = minY; y <= maxY; y++) {
         for (let z = minZ; z <= maxZ; z++) {
           const blockId = this.chunkManager.getBlockGlobal(x, y, z);
-          if (blockId !== BLOCK.AIR) {
-            const def = BLOCK_DEFS[blockId];
-            if (def && !def.transparent) {
-              return true;
-            }
+          if (this.isSolidBlock(blockId)) {
+            return true;
           }
         }
       }
@@ -504,7 +539,7 @@ export class FirstPersonController {
     const hit = this.chunkManager.raycast(
       raycaster.ray.origin,
       raycaster.ray.direction,
-      7
+      7,
     );
 
     if (!hit) {
@@ -532,7 +567,10 @@ export class FirstPersonController {
       this.breakingBlockPos = new THREE.Vector3(bx, by, bz);
       this.breakingProgress = 0;
 
-      const { breakDuration } = calculateBlockBreaking(blockId, this.activeHeldItem);
+      const { breakDuration } = calculateBlockBreaking(
+        blockId,
+        this.activeHeldItem,
+      );
       this.breakingDuration = Math.max(0.08, breakDuration);
     }
 
@@ -547,7 +585,10 @@ export class FirstPersonController {
     }
 
     if (this.onBreakingProgressChange) {
-      this.onBreakingProgressChange(Math.min(1.0, this.breakingProgress), this.breakingBlockPos);
+      this.onBreakingProgressChange(
+        Math.min(1.0, this.breakingProgress),
+        this.breakingBlockPos,
+      );
     }
 
     // Completed breaking!
@@ -558,8 +599,16 @@ export class FirstPersonController {
 
   public touchDigRequested: boolean = false;
 
-  private completeBlockBreak(x: number, y: number, z: number, blockId: number): void {
-    const { canHarvest, dropItemId, dropCount } = calculateBlockBreaking(blockId, this.activeHeldItem);
+  private completeBlockBreak(
+    x: number,
+    y: number,
+    z: number,
+    blockId: number,
+  ): void {
+    const { canHarvest, dropItemId, dropCount } = calculateBlockBreaking(
+      blockId,
+      this.activeHeldItem,
+    );
 
     // Destroy block
     this.chunkManager.setBlockGlobal(x, y, z, BLOCK.AIR, this.scene);
@@ -578,7 +627,7 @@ export class FirstPersonController {
         new THREE.Vector3(x + 0.5, y + 0.5, z + 0.5),
         canHarvest,
         dropItemId,
-        dropCount
+        dropCount,
       );
     }
 
@@ -610,7 +659,7 @@ export class FirstPersonController {
       // Check if player is holding food and wants to eat
       if (this.activeHeldItem) {
         const itemDef = ITEM_REGISTRY[this.activeHeldItem.id];
-        if (itemDef && itemDef.type === 'food') {
+        if (itemDef && itemDef.type === "food") {
           if (this.onEatFood) {
             this.onEatFood(this.activeHeldItem);
             return;
@@ -625,21 +674,37 @@ export class FirstPersonController {
     const hit = this.chunkManager.raycast(
       raycaster.ray.origin,
       raycaster.ray.direction,
-      7
+      7,
     );
 
     if (hit) {
       if (button === 0) {
         // Left-click:
-        const blockId = this.chunkManager.getBlockGlobal(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z);
+        const blockId = this.chunkManager.getBlockGlobal(
+          hit.blockPos.x,
+          hit.blockPos.y,
+          hit.blockPos.z,
+        );
         if (blockId !== BLOCK.AIR) {
-          const { breakDuration } = calculateBlockBreaking(blockId, this.activeHeldItem);
+          const { breakDuration } = calculateBlockBreaking(
+            blockId,
+            this.activeHeldItem,
+          );
           // If breakDuration is very low (diamond pickaxe or instant block), break immediately!
           if (breakDuration <= 0.15) {
-            this.completeBlockBreak(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z, blockId);
+            this.completeBlockBreak(
+              hit.blockPos.x,
+              hit.blockPos.y,
+              hit.blockPos.z,
+              blockId,
+            );
           } else {
             this.isLMBDown = true;
-            this.breakingBlockPos = new THREE.Vector3(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z);
+            this.breakingBlockPos = new THREE.Vector3(
+              hit.blockPos.x,
+              hit.blockPos.y,
+              hit.blockPos.z,
+            );
             this.breakingDuration = breakDuration;
             this.breakingProgress = 0.05;
           }
@@ -649,9 +714,12 @@ export class FirstPersonController {
         const targetBlockId = this.chunkManager.getBlockGlobal(
           hit.blockPos.x,
           hit.blockPos.y,
-          hit.blockPos.z
+          hit.blockPos.z,
         );
-        if (targetBlockId === BLOCK.CRAFTING_TABLE && this.onOpenCraftingTable) {
+        if (
+          targetBlockId === BLOCK.CRAFTING_TABLE &&
+          this.onOpenCraftingTable
+        ) {
           this.onOpenCraftingTable();
           return;
         }
@@ -671,9 +739,12 @@ export class FirstPersonController {
 
         // Check if placed block collides with player box
         const intersectsPlayer =
-          px + 1 > playerMinX && px < playerMaxX &&
-          py + 1 > playerMinY && py < playerMaxY &&
-          pz + 1 > playerMinZ && pz < playerMaxZ;
+          px + 1 > playerMinX &&
+          px < playerMaxX &&
+          py + 1 > playerMinY &&
+          py < playerMaxY &&
+          pz + 1 > playerMinZ &&
+          pz < playerMaxZ;
 
         if (!intersectsPlayer && selectedBlock !== BLOCK.AIR) {
           this.chunkManager.setBlockGlobal(
@@ -681,7 +752,7 @@ export class FirstPersonController {
             py,
             pz,
             selectedBlock,
-            this.scene
+            this.scene,
           );
           sound.playBlockPlace();
           this.netManager?.sendBlockEdit(px, py, pz, selectedBlock);

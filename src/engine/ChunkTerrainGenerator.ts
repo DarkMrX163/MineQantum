@@ -1,6 +1,12 @@
-import { createNoise2D, createNoise3D } from 'simplex-noise';
-import { CHUNK_SIZE_X, CHUNK_SIZE_Y, CHUNK_SIZE_Z, BLOCK, BlockId } from './types';
-import { getBlockIndex } from './ChunkMeshGenerator';
+import { createNoise2D, createNoise3D } from "simplex-noise";
+import {
+  CHUNK_SIZE_X,
+  CHUNK_SIZE_Y,
+  CHUNK_SIZE_Z,
+  BLOCK,
+  BlockId,
+} from "./types";
+import { getBlockIndex } from "./ChunkMeshGenerator";
 
 // Initialize Simplex noise generators
 const noise2D = createNoise2D();
@@ -36,7 +42,7 @@ export function hash2D(x: number, z: number): number {
 export function generateTerrain(
   chunkX: number,
   chunkZ: number,
-  _options: TerrainOptions = {}
+  _options: TerrainOptions = {},
 ): Uint8Array {
   const data = new Uint8Array(CHUNK_SIZE_X * CHUNK_SIZE_Z * CHUNK_SIZE_Y);
   const worldOffsetX = chunkX * CHUNK_SIZE_X;
@@ -53,7 +59,9 @@ export function generateTerrain(
       const hills = noise2D(gx * 0.02, gz * 0.02) * 0.5;
       const detail = noise2D(gx * 0.05, gz * 0.05) * 0.15;
 
-      const rawHeight = Math.floor(20 + continental * 14 + hills * 8 + detail * 4);
+      const rawHeight = Math.floor(
+        20 + continental * 14 + hills * 8 + detail * 4,
+      );
       const surfaceY = Math.min(CHUNK_SIZE_Y - 8, Math.max(2, rawHeight));
 
       const maxY = Math.max(surfaceY, SEA_LEVEL);
@@ -65,15 +73,42 @@ export function generateTerrain(
         } else if (y <= surfaceY) {
           if (surfaceY <= SEA_LEVEL) {
             // Underwater terrain: Sand / Gravel surface
-            block = y === surfaceY ? BLOCK.SAND : (y >= surfaceY - 3 ? BLOCK.SAND : BLOCK.STONE);
+            block =
+              y === surfaceY
+                ? BLOCK.SAND
+                : y >= surfaceY - 3
+                  ? BLOCK.SAND
+                  : BLOCK.STONE;
           } else if (surfaceY <= SEA_LEVEL + 2) {
             // Beach: Sand surface
-            block = y === surfaceY ? BLOCK.SAND : (y >= surfaceY - 3 ? BLOCK.SAND : BLOCK.STONE);
+            block =
+              y === surfaceY
+                ? BLOCK.SAND
+                : y >= surfaceY - 3
+                  ? BLOCK.SAND
+                  : BLOCK.STONE;
           } else {
             // Grassy terrain
             if (y === surfaceY) block = BLOCK.GRASS;
             else if (y >= surfaceY - 3) block = BLOCK.DIRT;
-            else block = BLOCK.STONE;
+            else {
+              block = BLOCK.STONE;
+              // Ore generation in stone strata
+              if (y > 0 && y < surfaceY - 4) {
+                const oreHash = hash2D(gx * 31 + y * 7, gz * 37);
+                if (oreHash < 0.006 && y < 14) {
+                  block = BLOCK.DIAMOND_ORE;
+                } else if (oreHash < 0.018 && y < 25) {
+                  block = BLOCK.GOLD_ORE;
+                } else if (oreHash < 0.032 && y < 20) {
+                  block = BLOCK.REDSTONE_ORE;
+                } else if (oreHash < 0.060) {
+                  block = BLOCK.IRON_ORE;
+                } else if (oreHash < 0.105) {
+                  block = BLOCK.COAL_ORE;
+                }
+              }
+            }
           }
 
           // Subterranean Cave Carving (y = 2 to surfaceY - 2)
@@ -115,12 +150,16 @@ export function generateTerrain(
           const c = noise2D(treeGx * 0.007, treeGz * 0.007);
           const h = noise2D(treeGx * 0.02, treeGz * 0.02) * 0.5;
           const d = noise2D(treeGx * 0.05, treeGz * 0.05) * 0.15;
-          const treeSurfaceY = Math.min(CHUNK_SIZE_Y - 8, Math.max(2, Math.floor(20 + c * 14 + h * 8 + d * 4)));
+          const treeSurfaceY = Math.min(
+            CHUNK_SIZE_Y - 8,
+            Math.max(2, Math.floor(20 + c * 14 + h * 8 + d * 4)),
+          );
 
           // Trees only spawn on grass above water level
           if (treeSurfaceY <= SEA_LEVEL + 2) continue;
 
-          const trunkHeight = 4 + Math.floor(hash2D(treeGx * 7, treeGz * 13) * 3); // 4 to 6 blocks
+          const trunkHeight =
+            4 + Math.floor(hash2D(treeGx * 7, treeGz * 13) * 3); // 4 to 6 blocks
 
           for (let dy = 0; dy <= trunkHeight + 1; dy++) {
             const leafY = treeSurfaceY + 1 + dy;
@@ -129,8 +168,10 @@ export function generateTerrain(
             const isTrunk = dy < trunkHeight;
             let radius = 0;
 
-            if (dy >= trunkHeight - 2 && dy < trunkHeight) radius = 2; // 5x5 canopy
-            else if (dy === trunkHeight) radius = 1; // 3x3 canopy
+            if (dy >= trunkHeight - 2 && dy < trunkHeight)
+              radius = 2; // 5x5 canopy
+            else if (dy === trunkHeight)
+              radius = 1; // 3x3 canopy
             else if (dy === trunkHeight + 1) radius = 1; // Top cap
 
             for (let ox = -radius; ox <= radius; ox++) {
@@ -141,15 +182,28 @@ export function generateTerrain(
                 const targetLx = targetGx - worldOffsetX;
                 const targetLz = targetGz - worldOffsetZ;
 
-                if (targetLx >= 0 && targetLx < CHUNK_SIZE_X && targetLz >= 0 && targetLz < CHUNK_SIZE_Z) {
+                if (
+                  targetLx >= 0 &&
+                  targetLx < CHUNK_SIZE_X &&
+                  targetLz >= 0 &&
+                  targetLz < CHUNK_SIZE_Z
+                ) {
                   const idx = getBlockIndex(targetLx, leafY, targetLz);
 
                   if (ox === 0 && oz === 0 && isTrunk) {
                     data[idx] = BLOCK.WOOD; // Wood Log Trunk
                   } else if (radius > 0) {
-                    const isCorner = Math.abs(ox) === radius && Math.abs(oz) === radius;
-                    if (!isCorner || (dy === trunkHeight - 1 && hash2D(targetGx, targetGz) > 0.4)) {
-                      if (data[idx] === BLOCK.AIR || data[idx] === BLOCK.LEAVES) {
+                    const isCorner =
+                      Math.abs(ox) === radius && Math.abs(oz) === radius;
+                    if (
+                      !isCorner ||
+                      (dy === trunkHeight - 1 &&
+                        hash2D(targetGx, targetGz) > 0.4)
+                    ) {
+                      if (
+                        data[idx] === BLOCK.AIR ||
+                        data[idx] === BLOCK.LEAVES
+                      ) {
                         data[idx] = BLOCK.LEAVES; // Oak Leaves
                       }
                     }

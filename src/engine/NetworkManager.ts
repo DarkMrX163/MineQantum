@@ -1,7 +1,11 @@
-import * as THREE from 'three';
-import { ChunkManager } from './ChunkManager';
-import { EntityModelBuilder, HumanoidModel, CreeperModel } from './EntityModelBuilder';
-import { sound } from './AudioEngine';
+import * as THREE from "three";
+import { ChunkManager } from "./ChunkManager";
+import {
+  EntityModelBuilder,
+  HumanoidModel,
+  CreeperModel,
+} from "./EntityModelBuilder";
+import { sound } from "./AudioEngine";
 
 export interface RemotePlayer {
   id: string;
@@ -21,7 +25,7 @@ export interface RemotePlayer {
 
 export interface NetworkMob {
   id: string;
-  type: 'zombie' | 'creeper' | 'steve';
+  type: "zombie" | "creeper" | "steve";
   x: number;
   y: number;
   z: number;
@@ -40,13 +44,21 @@ export interface NetworkMob {
 export class NetworkManager {
   private ws: WebSocket | null = null;
   public myId: string | null = null;
-  public myColor: string = '#10b981';
+  public myColor: string = "#10b981";
   public remotePlayers: Map<string, RemotePlayer> = new Map();
   public serverMobs: Map<string, NetworkMob> = new Map();
 
   // Callbacks
-  public onLocalPlayerDamaged?: (damage: number, knockback: { x: number; y: number; z: number }) => void;
-  public onExplosionEffect?: (x: number, y: number, z: number, radius: number) => void;
+  public onLocalPlayerDamaged?: (
+    damage: number,
+    knockback: { x: number; y: number; z: number },
+  ) => void;
+  public onExplosionEffect?: (
+    x: number,
+    y: number,
+    z: number,
+    radius: number,
+  ) => void;
 
   private scene: THREE.Scene;
   private chunkManager: ChunkManager;
@@ -72,14 +84,19 @@ export class NetworkManager {
   public connect(): void {
     if (
       this.isConnecting ||
-      (this.ws && (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING))
+      (this.ws &&
+        (this.ws.readyState === WebSocket.OPEN ||
+          this.ws.readyState === WebSocket.CONNECTING))
     ) {
       return;
     }
 
     this.isConnecting = true;
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${protocol}//${window.location.host}`;
+    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+    const defaultWsUrl = `${protocol}//${window.location.host}`;
+    const envWsUrl = import.meta.env.VITE_WS_URL;
+    const wsUrl =
+      envWsUrl && envWsUrl.trim().length > 0 ? envWsUrl : defaultWsUrl;
 
     try {
       this.ws = new WebSocket(wsUrl);
@@ -87,7 +104,7 @@ export class NetworkManager {
       this.ws.onopen = () => {
         this.isConnected = true;
         this.isConnecting = false;
-        console.log('[NetworkManager] Connected to WebSocket server');
+        console.log("[NetworkManager] Connected to WebSocket server");
       };
 
       this.ws.onmessage = (event) => {
@@ -95,14 +112,14 @@ export class NetworkManager {
           const msg = JSON.parse(event.data);
           this.handleServerMessage(msg);
         } catch (e) {
-          console.error('[NetworkManager] Error parsing message', e);
+          console.error("[NetworkManager] Error parsing message", e);
         }
       };
 
       this.ws.onclose = () => {
         this.isConnected = false;
         this.isConnecting = false;
-        console.log('[NetworkManager] Connection closed. Retrying in 5s...');
+        console.log("[NetworkManager] Connection closed. Retrying in 5s...");
         setTimeout(() => this.connect(), 5000);
       };
 
@@ -121,7 +138,7 @@ export class NetworkManager {
    */
   private handleServerMessage(msg: any): void {
     switch (msg.type) {
-      case 'init': {
+      case "init": {
         this.myId = msg.id;
         this.myColor = msg.color;
         if (Array.isArray(msg.players)) {
@@ -134,7 +151,7 @@ export class NetworkManager {
         break;
       }
 
-      case 'player_joined': {
+      case "player_joined": {
         if (msg.player && msg.player.id !== this.myId) {
           this.addRemotePlayer(msg.player);
           this.connectedPlayerCount = this.remotePlayers.size + 1;
@@ -142,7 +159,7 @@ export class NetworkManager {
         break;
       }
 
-      case 'player_left': {
+      case "player_left": {
         if (msg.id) {
           this.removeRemotePlayer(msg.id);
           this.connectedPlayerCount = this.remotePlayers.size + 1;
@@ -150,7 +167,7 @@ export class NetworkManager {
         break;
       }
 
-      case 'tick': {
+      case "tick": {
         // 20 TPS server tick containing all active players and mobs
         if (Array.isArray(msg.players)) {
           msg.players.forEach((p: RemotePlayer) => {
@@ -165,7 +182,7 @@ export class NetworkManager {
         break;
       }
 
-      case 'explosion': {
+      case "explosion": {
         sound.playBlockBreak();
         if (this.onExplosionEffect) {
           this.onExplosionEffect(msg.x, msg.y, msg.z, msg.radius);
@@ -173,26 +190,26 @@ export class NetworkManager {
         break;
       }
 
-      case 'player_damaged': {
+      case "player_damaged": {
         if (msg.playerId === this.myId && this.onLocalPlayerDamaged) {
           this.onLocalPlayerDamaged(msg.damage, msg.knockback);
         }
         break;
       }
 
-      case 'block_update': {
+      case "block_update": {
         // Block modification event received from server -> local rebuild of chunk mesh
         this.chunkManager.setBlockGlobal(
           msg.x,
           msg.y,
           msg.z,
           msg.blockType,
-          this.scene
+          this.scene,
         );
         break;
       }
 
-      case 'chunk_data': {
+      case "chunk_data": {
         // Streamed chunk block data from server
         const { cx, cz, data } = msg;
         const chunk = this.chunkManager.getOrCreateChunk(cx, cz);
@@ -207,7 +224,13 @@ export class NetworkManager {
   /**
    * Throttled sending of local player position and head rotation (20-30 times/sec)
    */
-  public sendPosition(x: number, y: number, z: number, yaw: number = 0, pitch: number = 0): void {
+  public sendPosition(
+    x: number,
+    y: number,
+    z: number,
+    yaw: number = 0,
+    pitch: number = 0,
+  ): void {
     const now = performance.now();
     if (now - this.lastPositionSendTime < this.SEND_INTERVAL_MS) {
       return; // Skip packet due to throttling
@@ -216,13 +239,13 @@ export class NetworkManager {
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
       this.ws.send(
         JSON.stringify({
-          type: 'player_move',
+          type: "player_move",
           x,
           y,
           z,
           yaw,
           pitch,
-        })
+        }),
       );
       this.lastPositionSendTime = now;
     }
@@ -231,16 +254,21 @@ export class NetworkManager {
   /**
    * Sends block modification event to server for validation & broadcast
    */
-  public sendBlockEdit(x: number, y: number, z: number, blockType: number): void {
+  public sendBlockEdit(
+    x: number,
+    y: number,
+    z: number,
+    blockType: number,
+  ): void {
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
       this.ws.send(
         JSON.stringify({
-          type: 'block_edit',
+          type: "block_edit",
           x,
           y,
           z,
           blockType,
-        })
+        }),
       );
     }
   }
@@ -264,14 +292,14 @@ export class NetworkManager {
         player.mesh.rotation.y = THREE.MathUtils.lerp(
           player.mesh.rotation.y,
           player.targetYaw,
-          lerpSpeed
+          lerpSpeed,
         );
 
         if (player.headMesh) {
           player.headMesh.rotation.x = THREE.MathUtils.lerp(
             player.headMesh.rotation.x,
             player.pitch,
-            lerpSpeed
+            lerpSpeed,
           );
         }
 
@@ -282,8 +310,15 @@ export class NetworkManager {
           const isMoving = movedDist > 0.005;
 
           player.walkTime = (player.walkTime || 0) + delta;
-          const moveSpeed = Math.min(2.0, (movedDist / Math.max(0.001, delta)) * 0.5);
-          player.humanoidModel.animateWalk(player.walkTime, moveSpeed, isMoving);
+          const moveSpeed = Math.min(
+            2.0,
+            (movedDist / Math.max(0.001, delta)) * 0.5,
+          );
+          player.humanoidModel.animateWalk(
+            player.walkTime,
+            moveSpeed,
+            isMoving,
+          );
           player.humanoidModel.setLookDirection(0, player.pitch);
         }
       }
@@ -295,14 +330,18 @@ export class NetworkManager {
       mob.model.rotation.y = THREE.MathUtils.lerp(
         mob.model.rotation.y,
         mob.targetYaw,
-        lerpSpeed
+        lerpSpeed,
       );
 
       mob.walkTime += delta;
-      mob.model.animateWalk(mob.walkTime, mob.isMoving ? 1.0 : 0.0, mob.isMoving);
+      mob.model.animateWalk(
+        mob.walkTime,
+        mob.isMoving ? 1.0 : 0.0,
+        mob.isMoving,
+      );
 
       // Creeper swelling and inflation when hissing/fusing (< 3 blocks)
-      if (mob.type === 'creeper') {
+      if (mob.type === "creeper") {
         if (mob.isFusing) {
           const swell = 1.0 + (mob.fuseProgress || 0) * 0.45;
           mob.model.scale.set(swell, swell, swell);
@@ -332,9 +371,9 @@ export class NetworkManager {
       } else {
         // Construct new 3D mob model from EntityModelBuilder
         let model: HumanoidModel | CreeperModel;
-        if (data.type === 'creeper') {
+        if (data.type === "creeper") {
           model = new CreeperModel();
-        } else if (data.type === 'zombie') {
+        } else if (data.type === "zombie") {
           model = new HumanoidModel({ isZombie: true });
         } else {
           model = new HumanoidModel({ isZombie: false });
@@ -373,21 +412,21 @@ export class NetworkManager {
     });
   }
 
-  public sendSpawnMob(mobType: 'steve' | 'zombie' | 'creeper', x: number, y: number, z: number): void {
+  public sendSpawnMob(mobType: string, x: number, y: number, z: number): void {
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-      this.ws.send(JSON.stringify({ type: 'spawn_mob', mobType, x, y, z }));
+      this.ws.send(JSON.stringify({ type: "spawn_mob", mobType, x, y, z }));
     }
   }
 
   public sendClearMobs(): void {
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-      this.ws.send(JSON.stringify({ type: 'clear_mobs' }));
+      this.ws.send(JSON.stringify({ type: "clear_mobs" }));
     }
   }
 
   public sendSetNight(isNight: boolean): void {
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-      this.ws.send(JSON.stringify({ type: 'set_night', isNight }));
+      this.ws.send(JSON.stringify({ type: "set_night", isNight }));
     }
   }
 

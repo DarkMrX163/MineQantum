@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { Heart, Flame, Zap } from 'lucide-react';
 
+import { ActiveWorldEvent } from '../engine/WorldEventManager';
+
 interface SurvivalHUDProps {
   health: number; // 0 to 20 (10 hearts)
   maxHealth?: number;
@@ -8,6 +10,8 @@ interface SurvivalHUDProps {
   maxHunger?: number;
   isSprinting: boolean;
   damageFlashTrigger: number; // timestamp to trigger 200ms red flash
+  activeEvent?: ActiveWorldEvent | null;
+  eventNotification?: string | null;
 }
 
 export const SurvivalHUD: React.FC<SurvivalHUDProps> = ({
@@ -17,6 +21,8 @@ export const SurvivalHUD: React.FC<SurvivalHUDProps> = ({
   maxHunger = 20,
   isSprinting,
   damageFlashTrigger,
+  activeEvent,
+  eventNotification,
 }) => {
   const [isFlashing, setIsFlashing] = useState(false);
 
@@ -136,6 +142,40 @@ export const SurvivalHUD: React.FC<SurvivalHUDProps> = ({
 
   return (
     <>
+      {/* Mini-game Active Event Banner Overlay */}
+      {activeEvent && (
+        <div className="fixed top-16 left-1/2 -translate-x-1/2 z-35 pointer-events-none select-none flex flex-col items-center max-w-[90vw]">
+          <div className="bg-slate-900/95 border-2 border-amber-500/80 rounded-2xl px-6 py-2.5 shadow-2xl backdrop-blur-xl flex flex-col items-center gap-1">
+            <div className="text-amber-300 font-bold text-sm font-mono flex items-center gap-2 flex-wrap justify-center">
+              <span>{activeEvent.title}</span>
+              <span className="text-emerald-300 font-mono text-xs px-2 py-0.5 rounded bg-emerald-950 border border-emerald-700">
+                ⏱️ {Math.floor(activeEvent.durationLeft / 60)}:
+                {Math.floor(activeEvent.durationLeft % 60)
+                  .toString()
+                  .padStart(2, '0')}
+              </span>
+            </div>
+            <p className="text-xs text-slate-300 font-medium text-center">
+              {activeEvent.description}
+            </p>
+            {activeEvent.currentKills !== undefined && (
+              <span className="text-xs text-indigo-300 font-mono font-bold bg-indigo-950/80 px-2 py-0.5 rounded border border-indigo-800">
+                🎯 Уничтожено монстров: {activeEvent.currentKills} / {activeEvent.targetKillsNeeded}
+              </span>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Event Notification Toast Banner */}
+      {eventNotification && (
+        <div className="fixed top-6 left-1/2 -translate-x-1/2 z-40 pointer-events-none select-none flex flex-col items-center max-w-[90vw] animate-bounce">
+          <div className="bg-amber-500 text-slate-950 font-bold px-6 py-2 rounded-xl shadow-2xl border-2 border-amber-300 text-sm font-mono text-center">
+            {eventNotification}
+          </div>
+        </div>
+      )}
+
       {/* 200ms Damage Red Flash Vignette on screen */}
       <div
         className={`fixed inset-0 pointer-events-none z-40 transition-opacity duration-75 ${

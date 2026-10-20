@@ -1,4 +1,4 @@
-import * as THREE from 'three';
+import * as THREE from "three";
 import {
   CHUNK_SIZE_X,
   CHUNK_SIZE_Y,
@@ -6,9 +6,9 @@ import {
   BLOCK,
   BlockId,
   ChunkStats,
-} from './types';
-import { generateChunkGeometry, getBlockIndex } from './ChunkMeshGenerator';
-import { generateTerrain } from './ChunkTerrainGenerator';
+} from "./types";
+import { generateChunkGeometry, getBlockIndex } from "./ChunkMeshGenerator";
+import { generateTerrain } from "./ChunkTerrainGenerator";
 import {
   LightManager,
   unpackSky,
@@ -16,7 +16,7 @@ import {
   packLight,
   getLightEmission,
   isLightTransparent,
-} from './LightingEngine';
+} from "./LightingEngine";
 
 export class Chunk {
   public cx: number;
@@ -37,14 +37,28 @@ export class Chunk {
   }
 
   public getBlock(x: number, y: number, z: number): number {
-    if (x < 0 || x >= CHUNK_SIZE_X || y < 0 || y >= CHUNK_SIZE_Y || z < 0 || z >= CHUNK_SIZE_Z) {
+    if (
+      x < 0 ||
+      x >= CHUNK_SIZE_X ||
+      y < 0 ||
+      y >= CHUNK_SIZE_Y ||
+      z < 0 ||
+      z >= CHUNK_SIZE_Z
+    ) {
       return BLOCK.AIR;
     }
     return this.data[getBlockIndex(x, y, z)];
   }
 
   public setBlock(x: number, y: number, z: number, blockId: number): void {
-    if (x < 0 || x >= CHUNK_SIZE_X || y < 0 || y >= CHUNK_SIZE_Y || z < 0 || z >= CHUNK_SIZE_Z) {
+    if (
+      x < 0 ||
+      x >= CHUNK_SIZE_X ||
+      y < 0 ||
+      y >= CHUNK_SIZE_Y ||
+      z < 0 ||
+      z >= CHUNK_SIZE_Z
+    ) {
       return;
     }
     const idx = getBlockIndex(x, y, z);
@@ -55,14 +69,28 @@ export class Chunk {
   }
 
   public getLight(x: number, y: number, z: number): number {
-    if (x < 0 || x >= CHUNK_SIZE_X || y < 0 || y >= CHUNK_SIZE_Y || z < 0 || z >= CHUNK_SIZE_Z) {
-      return y >= CHUNK_SIZE_Y ? (15 << 4) : 0;
+    if (
+      x < 0 ||
+      x >= CHUNK_SIZE_X ||
+      y < 0 ||
+      y >= CHUNK_SIZE_Y ||
+      z < 0 ||
+      z >= CHUNK_SIZE_Z
+    ) {
+      return y >= CHUNK_SIZE_Y ? 15 << 4 : 0;
     }
     return this.lightMap[getBlockIndex(x, y, z)];
   }
 
   public setLight(x: number, y: number, z: number, val: number): void {
-    if (x < 0 || x >= CHUNK_SIZE_X || y < 0 || y >= CHUNK_SIZE_Y || z < 0 || z >= CHUNK_SIZE_Z) {
+    if (
+      x < 0 ||
+      x >= CHUNK_SIZE_X ||
+      y < 0 ||
+      y >= CHUNK_SIZE_Y ||
+      z < 0 ||
+      z >= CHUNK_SIZE_Z
+    ) {
       return;
     }
     const idx = getBlockIndex(x, y, z);
@@ -134,7 +162,12 @@ export class ChunkManager {
       });
 
       // Initialize sky light and block lights in this chunk
-      this.lightManager.initializeChunkSkyLight(chunk.data, chunk.lightMap, cx, cz);
+      this.lightManager.initializeChunkSkyLight(
+        chunk.data,
+        chunk.lightMap,
+        cx,
+        cz,
+      );
 
       this.chunks.set(key, chunk);
     }
@@ -160,17 +193,37 @@ export class ChunkManager {
   }
 
   /**
+   * Finds top solid ground Y coordinate at global (gx, gz)
+   */
+  public getTopGroundY(gx: number, gz: number): number {
+    const ix = Math.floor(gx);
+    const iz = Math.floor(gz);
+    for (let y = CHUNK_SIZE_Y - 1; y >= 1; y--) {
+      const blockId = this.getBlockGlobal(ix, y, iz);
+      if (
+        blockId !== BLOCK.AIR &&
+        blockId !== BLOCK.WATER &&
+        blockId !== BLOCK.LAVA &&
+        blockId !== BLOCK.TORCH
+      ) {
+        return y + 1; // Stand on top surface of solid block
+      }
+    }
+    return 16; // default surface level fallback
+  }
+
+  /**
    * Reads packed light value (sky + block) at global coordinates (gx, gy, gz)
    */
   public getLightGlobal(gx: number, gy: number, gz: number): number {
-    if (gy >= CHUNK_SIZE_Y) return (15 << 4);
+    if (gy >= CHUNK_SIZE_Y) return 15 << 4;
     if (gy < 0) return 0;
 
     const cx = Math.floor(gx / CHUNK_SIZE_X);
     const cz = Math.floor(gz / CHUNK_SIZE_Z);
     const chunk = this.chunks.get(this.getChunkKey(cx, cz));
 
-    if (!chunk) return (15 << 4);
+    if (!chunk) return 15 << 4;
 
     const lx = ((gx % CHUNK_SIZE_X) + CHUNK_SIZE_X) % CHUNK_SIZE_X;
     const lz = ((gz % CHUNK_SIZE_Z) + CHUNK_SIZE_Z) % CHUNK_SIZE_Z;
@@ -203,7 +256,7 @@ export class ChunkManager {
     gy: number,
     gz: number,
     blockId: number,
-    scene?: THREE.Scene
+    scene?: THREE.Scene,
   ): void {
     if (gy < 0 || gy >= CHUNK_SIZE_Y) return;
 
@@ -271,9 +324,12 @@ export class ChunkManager {
 
       // Flood surrounding block light from neighbors into newly excavated space
       const DIRS = [
-        [1, 0, 0], [-1, 0, 0],
-        [0, 1, 0], [0, -1, 0],
-        [0, 0, 1], [0, 0, -1],
+        [1, 0, 0],
+        [-1, 0, 0],
+        [0, 1, 0],
+        [0, -1, 0],
+        [0, 0, 1],
+        [0, 0, -1],
       ];
       for (const [dx, dy, dz] of DIRS) {
         const ny = gy + dy;
@@ -281,7 +337,12 @@ export class ChunkManager {
         const nLight = this.getLightGlobal(gx + dx, ny, gz + dz);
         const bLight = unpackBlock(nLight);
         if (bLight > 1) {
-          this.lightManager.propagateBlockLightBFS(gx + dx, ny, gz + dz, bLight);
+          this.lightManager.propagateBlockLightBFS(
+            gx + dx,
+            ny,
+            gz + dz,
+            bLight,
+          );
         }
       }
     }
@@ -311,7 +372,10 @@ export class ChunkManager {
   /**
    * Rebuilds meshes for all dirty chunks with lighting and AO
    */
-  public rebuildDirtyMeshes(scene: THREE.Scene, naiveMode: boolean = false): void {
+  public rebuildDirtyMeshes(
+    scene: THREE.Scene,
+    naiveMode: boolean = false,
+  ): void {
     const boundGetBlockGlobal = (gx: number, gy: number, gz: number) =>
       this.getBlockGlobal(gx, gy, gz);
     const boundGetLightGlobal = (gx: number, gy: number, gz: number) =>
@@ -328,19 +392,20 @@ export class ChunkManager {
       }
 
       // Generate open-face culled geometry with lighting and 4-level AO
-      const { geometry, renderedFaceCount, naiveFaceCount } = generateChunkGeometry(
-        chunk.data,
-        chunk.lightMap,
-        chunk.cx,
-        chunk.cz,
-        boundGetBlockGlobal,
-        boundGetLightGlobal,
-        {
-          enableAO: this.enableAO,
-          naiveNoCull: naiveMode,
-          skyIntensity: this.skyIntensity,
-        }
-      );
+      const { geometry, renderedFaceCount, naiveFaceCount } =
+        generateChunkGeometry(
+          chunk.data,
+          chunk.lightMap,
+          chunk.cx,
+          chunk.cz,
+          boundGetBlockGlobal,
+          boundGetLightGlobal,
+          {
+            enableAO: this.enableAO,
+            naiveNoCull: naiveMode,
+            skyIntensity: this.skyIntensity,
+          },
+        );
 
       chunk.renderedFaces = renderedFaceCount;
       chunk.naiveFaces = naiveFaceCount;
@@ -363,7 +428,9 @@ export class ChunkManager {
    */
   public setSkyIntensity(intensity: number, scene?: THREE.Scene): void {
     this.skyIntensity = intensity;
-    this.chunks.forEach((c) => { c.isDirty = true; });
+    this.chunks.forEach((c) => {
+      c.isDirty = true;
+    });
     if (scene) {
       this.rebuildDirtyMeshes(scene);
     }
@@ -374,7 +441,9 @@ export class ChunkManager {
    */
   public setEnableAO(enable: boolean, scene?: THREE.Scene): void {
     this.enableAO = enable;
-    this.chunks.forEach((c) => { c.isDirty = true; });
+    this.chunks.forEach((c) => {
+      c.isDirty = true;
+    });
     if (scene) {
       this.rebuildDirtyMeshes(scene);
     }
@@ -388,7 +457,7 @@ export class ChunkManager {
     playerZ: number,
     renderDistance: number,
     scene: THREE.Scene,
-    naiveMode: boolean = false
+    naiveMode: boolean = false,
   ): void {
     const playerChunkX = Math.floor(playerX / CHUNK_SIZE_X);
     const playerChunkZ = Math.floor(playerZ / CHUNK_SIZE_Z);
@@ -398,7 +467,8 @@ export class ChunkManager {
     for (let dx = -renderDistance; dx <= renderDistance; dx++) {
       for (let dz = -renderDistance; dz <= renderDistance; dz++) {
         // Circle distance check for smooth perimeter loading
-        if (dx * dx + dz * dz > (renderDistance + 0.5) * (renderDistance + 0.5)) continue;
+        if (dx * dx + dz * dz > (renderDistance + 0.5) * (renderDistance + 0.5))
+          continue;
 
         const cx = playerChunkX + dx;
         const cz = playerChunkZ + dz;
@@ -429,7 +499,7 @@ export class ChunkManager {
   public raycast(
     origin: THREE.Vector3,
     direction: THREE.Vector3,
-    maxDistance: number = 8
+    maxDistance: number = 8,
   ): {
     hit: boolean;
     blockPos: THREE.Vector3;
@@ -455,9 +525,18 @@ export class ChunkManager {
     const tDeltaY = Math.abs(1 / dy);
     const tDeltaZ = Math.abs(1 / dz);
 
-    let tMaxX = dx > 0 ? (Math.floor(origin.x) + 1 - origin.x) * tDeltaX : (origin.x - Math.floor(origin.x)) * tDeltaX;
-    let tMaxY = dy > 0 ? (Math.floor(origin.y) + 1 - origin.y) * tDeltaY : (origin.y - Math.floor(origin.y)) * tDeltaY;
-    let tMaxZ = dz > 0 ? (Math.floor(origin.z) + 1 - origin.z) * tDeltaZ : (origin.z - Math.floor(origin.z)) * tDeltaZ;
+    let tMaxX =
+      dx > 0
+        ? (Math.floor(origin.x) + 1 - origin.x) * tDeltaX
+        : (origin.x - Math.floor(origin.x)) * tDeltaX;
+    let tMaxY =
+      dy > 0
+        ? (Math.floor(origin.y) + 1 - origin.y) * tDeltaY
+        : (origin.y - Math.floor(origin.y)) * tDeltaY;
+    let tMaxZ =
+      dz > 0
+        ? (Math.floor(origin.z) + 1 - origin.z) * tDeltaZ
+        : (origin.z - Math.floor(origin.z)) * tDeltaZ;
 
     let normal = new THREE.Vector3();
     let distance = 0;
@@ -523,9 +602,8 @@ export class ChunkManager {
       totalBlocks += CHUNK_SIZE_X * CHUNK_SIZE_Y * CHUNK_SIZE_Z;
     });
 
-    const cullingEfficiency = naiveFaceCount > 0
-      ? ((1 - renderedFaces / naiveFaceCount) * 100)
-      : 0;
+    const cullingEfficiency =
+      naiveFaceCount > 0 ? (1 - renderedFaces / naiveFaceCount) * 100 : 0;
 
     return {
       loadedChunks,

@@ -1,5 +1,5 @@
-import * as THREE from 'three';
-import { ChunkManager } from './ChunkManager';
+import * as THREE from "three";
+import { ChunkManager } from "./ChunkManager";
 
 export interface RemotePlayer {
   id: string;
@@ -15,7 +15,7 @@ export interface RemotePlayer {
 export class MultiplayerClient {
   private ws: WebSocket | null = null;
   public myId: string | null = null;
-  public myColor: string = '#10b981';
+  public myColor: string = "#10b981";
   public remotePlayers: Map<string, RemotePlayer> = new Map();
   private scene: THREE.Scene;
   private chunkManager: ChunkManager;
@@ -32,12 +32,17 @@ export class MultiplayerClient {
   private isConnecting: boolean = false;
 
   private connect(): void {
-    if (this.isConnecting || (this.ws && (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING))) {
+    if (
+      this.isConnecting ||
+      (this.ws &&
+        (this.ws.readyState === WebSocket.OPEN ||
+          this.ws.readyState === WebSocket.CONNECTING))
+    ) {
       return;
     }
 
     this.isConnecting = true;
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
     const wsUrl = `${protocol}//${window.location.host}`;
 
     try {
@@ -46,7 +51,7 @@ export class MultiplayerClient {
       this.ws.onopen = () => {
         this.isConnected = true;
         this.isConnecting = false;
-        console.log('[MultiplayerClient] Connected to WebSocket server');
+        console.log("[MultiplayerClient] Connected to WebSocket server");
       };
 
       this.ws.onmessage = (event) => {
@@ -54,7 +59,7 @@ export class MultiplayerClient {
           const msg = JSON.parse(event.data);
           this.handleMessage(msg);
         } catch (e) {
-          console.error('[MultiplayerClient] Failed to parse message', e);
+          console.error("[MultiplayerClient] Failed to parse message", e);
         }
       };
 
@@ -76,7 +81,7 @@ export class MultiplayerClient {
 
   private handleMessage(msg: any): void {
     switch (msg.type) {
-      case 'init': {
+      case "init": {
         this.myId = msg.id;
         this.myColor = msg.color;
         if (Array.isArray(msg.players)) {
@@ -86,7 +91,7 @@ export class MultiplayerClient {
         break;
       }
 
-      case 'player_joined': {
+      case "player_joined": {
         if (msg.player && msg.player.id !== this.myId) {
           this.addRemotePlayer(msg.player);
           this.connectedPlayerCount = this.remotePlayers.size + 1;
@@ -94,7 +99,7 @@ export class MultiplayerClient {
         break;
       }
 
-      case 'player_left': {
+      case "player_left": {
         if (msg.id) {
           this.removeRemotePlayer(msg.id);
           this.connectedPlayerCount = this.remotePlayers.size + 1;
@@ -102,7 +107,7 @@ export class MultiplayerClient {
         break;
       }
 
-      case 'tick': {
+      case "tick": {
         // 20 TPS tick containing all player positions
         if (Array.isArray(msg.players)) {
           msg.players.forEach((p: RemotePlayer) => {
@@ -114,7 +119,7 @@ export class MultiplayerClient {
         break;
       }
 
-      case 'block_update': {
+      case "block_update": {
         // Broadcasted block edit from server
         if (msg.playerId !== this.myId) {
           this.chunkManager.setBlockGlobal(
@@ -122,13 +127,13 @@ export class MultiplayerClient {
             msg.y,
             msg.z,
             msg.blockType,
-            this.scene
+            this.scene,
           );
         }
         break;
       }
 
-      case 'chunk_data': {
+      case "chunk_data": {
         // Received chunk data from server
         const { cx, cz, data } = msg;
         const chunk = this.chunkManager.getOrCreateChunk(cx, cz);
@@ -143,17 +148,23 @@ export class MultiplayerClient {
   /**
    * Sends local player movement to server
    */
-  public sendPlayerMove(x: number, y: number, z: number, yaw: number = 0, pitch: number = 0): void {
+  public sendPlayerMove(
+    x: number,
+    y: number,
+    z: number,
+    yaw: number = 0,
+    pitch: number = 0,
+  ): void {
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
       this.ws.send(
         JSON.stringify({
-          type: 'player_move',
+          type: "player_move",
           x,
           y,
           z,
           yaw,
           pitch,
-        })
+        }),
       );
     }
   }
@@ -161,16 +172,21 @@ export class MultiplayerClient {
   /**
    * Sends block edit to server for validation & world state persistence
    */
-  public sendBlockEdit(x: number, y: number, z: number, blockType: number): void {
+  public sendBlockEdit(
+    x: number,
+    y: number,
+    z: number,
+    blockType: number,
+  ): void {
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
       this.ws.send(
         JSON.stringify({
-          type: 'block_edit',
+          type: "block_edit",
           x,
           y,
           z,
           blockType,
-        })
+        }),
       );
     }
   }
@@ -186,7 +202,7 @@ export class MultiplayerClient {
     // Body (0.6 x 1.2 x 0.4)
     const bodyGeo = new THREE.BoxGeometry(0.5, 1.0, 0.4);
     const bodyMat = new THREE.MeshStandardMaterial({
-      color: new THREE.Color(p.color || '#3b82f6'),
+      color: new THREE.Color(p.color || "#3b82f6"),
       roughness: 0.5,
     });
     const bodyMesh = new THREE.Mesh(bodyGeo, bodyMat);
@@ -196,7 +212,7 @@ export class MultiplayerClient {
     // Head (0.4 x 0.4 x 0.4)
     const headGeo = new THREE.BoxGeometry(0.4, 0.4, 0.4);
     const headMat = new THREE.MeshStandardMaterial({
-      color: new THREE.Color('#fde047'),
+      color: new THREE.Color("#fde047"),
       roughness: 0.4,
     });
     const headMesh = new THREE.Mesh(headGeo, headMat);

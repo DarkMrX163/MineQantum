@@ -1,16 +1,31 @@
-import React, { useEffect, useRef, useState } from 'react';
-import * as THREE from 'three';
-import { ChunkManager } from '../engine/ChunkManager';
-import { FirstPersonController } from '../engine/FirstPersonController';
-import { createTextureAtlas } from '../engine/TextureAtlas';
-import { createWaterShaderMaterial } from '../engine/WaterShader';
-import { BlockId, ChunkStats } from '../engine/types';
-import { NetworkManager } from '../engine/NetworkManager';
-import { MobManager } from '../engine/MobManager';
-import { sound } from '../engine/AudioEngine';
-import { TouchControls } from './TouchControls';
-import { MousePointer } from 'lucide-react';
-import { DroppedItemManager, SlotItem, ITEM_REGISTRY } from '../engine/InventorySystem';
+import React, { useEffect, useRef, useState } from "react";
+import * as THREE from "three";
+import { ChunkManager } from "../engine/ChunkManager";
+import { FirstPersonController } from "../engine/FirstPersonController";
+import { createTextureAtlas } from "../engine/TextureAtlas";
+import { createWaterShaderMaterial } from "../engine/WaterShader";
+import { BlockId, ChunkStats } from "../engine/types";
+import { NetworkManager } from "../engine/NetworkManager";
+import { MobManager } from "../engine/MobManager";
+import { sound } from "../engine/AudioEngine";
+import { TouchControls } from "./TouchControls";
+import { MousePointer } from "lucide-react";
+import {
+  DroppedItemManager,
+  SlotItem,
+  ITEM_REGISTRY,
+} from "../engine/InventorySystem";
+import { WeatherEngine, WeatherType } from "../engine/WeatherEngine";
+import { VoiceChatManager } from "../engine/VoiceChatManager";
+import { LandClaimManager } from "../engine/LandClaimManager";
+import { EmoteManager, EmoteType } from "../engine/EmoteManager";
+import { HapticManager } from "../engine/HapticManager";
+import {
+  WorldEventManager,
+  ActiveWorldEvent,
+  EventType,
+} from "../engine/WorldEventManager";
+import { BlockParticleManager } from "../engine/BlockParticleManager";
 
 interface VoxelCanvasProps {
   selectedBlock: BlockId;
@@ -24,7 +39,10 @@ interface VoxelCanvasProps {
   onEatFood?: (item: SlotItem) => void;
   onOpenCraftingTable?: () => void;
   respawnTrigger?: number;
-  deathScatterTrigger?: { items: (SlotItem | null)[]; timestamp: number } | null;
+  deathScatterTrigger?: {
+    items: (SlotItem | null)[];
+    timestamp: number;
+  } | null;
   isFlyMode: boolean;
   renderDistance: number;
   naiveMode: boolean;
@@ -38,9 +56,28 @@ interface VoxelCanvasProps {
   onMultiplayerStatsUpdate?: (onlinePlayers: number) => void;
   isNight?: boolean;
   enableAO?: boolean;
-  spawnMobTrigger?: { type: 'steve' | 'zombie' | 'creeper'; timestamp: number } | null;
+  spawnMobTrigger?: {
+    type:
+      | "steve"
+      | "zombie"
+      | "creeper"
+      | "skeleton"
+      | "enderman"
+      | "cow"
+      | "sheep"
+      | "pig";
+    timestamp: number;
+  } | null;
   clearMobsTrigger?: number;
   onMobCountUpdate?: (count: number) => void;
+  weather?: WeatherType;
+  onWeatherChange?: (weather: WeatherType) => void;
+  activeEmote?: EmoteType;
+  claimChunkTrigger?: number;
+  onClaimStatus?: (msg: string) => void;
+  triggerEvent?: EventType | null;
+  onActiveEventUpdate?: (event: ActiveWorldEvent | null) => void;
+  onEventNotification?: (msg: string) => void;
 }
 
 export const VoxelCanvas: React.FC<VoxelCanvasProps> = ({
@@ -72,6 +109,12 @@ export const VoxelCanvas: React.FC<VoxelCanvasProps> = ({
   spawnMobTrigger,
   clearMobsTrigger,
   onMobCountUpdate,
+  weather = "sunny",
+  onWeatherChange,
+  activeEmote = "none",
+  triggerEvent,
+  onActiveEventUpdate,
+  onEventNotification,
 }) => {
   const mountRef = useRef<HTMLDivElement>(null);
 
@@ -79,6 +122,7 @@ export const VoxelCanvas: React.FC<VoxelCanvasProps> = ({
   const chunkManagerRef = useRef<ChunkManager | null>(null);
   const mobManagerRef = useRef<MobManager | null>(null);
   const dropManagerRef = useRef<DroppedItemManager | null>(null);
+  const eventManagerRef = useRef<WorldEventManager | null>(null);
   const highlightMeshRef = useRef<THREE.Mesh | null>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
   const dirLightRef = useRef<THREE.DirectionalLight | null>(null);
@@ -97,7 +141,7 @@ export const VoxelCanvas: React.FC<VoxelCanvasProps> = ({
     // 1. Initialize Scene & Fog
     const scene = new THREE.Scene();
     sceneRef.current = scene;
-    const initialBgColor = isNight ? '#0b0e1a' : '#78a7ff';
+    const initialBgColor = isNight ? "#0b0e1a" : "#78a7ff";
     scene.background = new THREE.Color(initialBgColor);
     scene.fog = new THREE.FogExp2(initialBgColor, 0.007);
 
@@ -106,11 +150,14 @@ export const VoxelCanvas: React.FC<VoxelCanvasProps> = ({
       70,
       window.innerWidth / window.innerHeight,
       0.1,
-      500
+      500,
     );
 
     // 3. Initialize WebGL Renderer
-    const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+    const renderer = new THREE.WebGLRenderer({
+      antialias: true,
+      powerPreference: "high-performance",
+    });
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -122,11 +169,18 @@ export const VoxelCanvas: React.FC<VoxelCanvasProps> = ({
     mountRef.current.appendChild(renderer.domElement);
 
     // 4. Studio Lighting
-    const ambientLight = new THREE.HemisphereLight('#87ceeb', '#3d2817', isNight ? 0.2 : 0.65);
+    const ambientLight = new THREE.HemisphereLight(
+      "#87ceeb",
+      "#3d2817",
+      isNight ? 0.2 : 0.65,
+    );
     ambientLightRef.current = ambientLight;
     scene.add(ambientLight);
 
-    const dirLight = new THREE.DirectionalLight('#fff4e0', isNight ? 0.2 : 1.25);
+    const dirLight = new THREE.DirectionalLight(
+      "#fff4e0",
+      isNight ? 0.2 : 1.25,
+    );
     dirLightRef.current = dirLight;
     dirLight.position.set(60, 100, 40);
     dirLight.castShadow = true;
@@ -167,7 +221,7 @@ export const VoxelCanvas: React.FC<VoxelCanvasProps> = ({
       camera,
       renderer.domElement,
       chunkManager,
-      scene
+      scene,
     );
     controller.position.set(8, 28, 8);
     controllerRef.current = controller;
@@ -180,7 +234,7 @@ export const VoxelCanvas: React.FC<VoxelCanvasProps> = ({
     netManager.onLocalPlayerDamaged = (damage, knockback) => {
       sound.playHurt();
       controller.applyKnockback(knockback.x, knockback.y, knockback.z);
-      onTakeDamage?.(damage, 'mob');
+      onTakeDamage?.(damage, "mob");
     };
 
     netManager.onExplosionEffect = (x, y, z, radius) => {
@@ -191,11 +245,11 @@ export const VoxelCanvas: React.FC<VoxelCanvasProps> = ({
       }
     };
 
-    controller.controls.addEventListener('lock', () => {
+    controller.controls.addEventListener("lock", () => {
       setIsLocked(true);
       onPointerLockChange(true);
     });
-    controller.controls.addEventListener('unlock', () => {
+    controller.controls.addEventListener("unlock", () => {
       setIsLocked(false);
       onPointerLockChange(false);
     });
@@ -206,7 +260,7 @@ export const VoxelCanvas: React.FC<VoxelCanvasProps> = ({
       controller.position.z,
       renderDistance,
       scene,
-      naiveMode
+      naiveMode,
     );
 
     // Position player safely on the top surface block at spawn (x: 8, z: 8) without fall damage
@@ -228,12 +282,23 @@ export const VoxelCanvas: React.FC<VoxelCanvasProps> = ({
     const dropManager = new DroppedItemManager(scene, chunkManager);
     dropManagerRef.current = dropManager;
 
+    // 8.55 Initialize BlockParticleManager for 3D block breaking particle effect
+    const particleManager = new BlockParticleManager(scene);
+
     // Wire controller block breaking, durability, combat, and 3D drops
-    controller.onBlockBroken = (blockId, pos, canHarvest, dropItemId, dropCount) => {
+    controller.onBlockBroken = (
+      blockId,
+      pos,
+      canHarvest,
+      dropItemId,
+      dropCount,
+    ) => {
+      HapticManager.blockBreak();
+      particleManager.spawnBreakEffect(blockId, pos);
       if (canHarvest && dropItemId) {
         dropManager.spawnDrop(
           { id: dropItemId, count: dropCount, maxStack: 64 },
-          pos
+          pos,
         );
       }
     };
@@ -241,6 +306,7 @@ export const VoxelCanvas: React.FC<VoxelCanvasProps> = ({
       onToolUsed?.();
     };
     controller.onBlockPlaced = () => {
+      HapticManager.tap();
       onBlockPlaced?.();
     };
     controller.onBreakingProgressChange = (prog) => {
@@ -250,6 +316,7 @@ export const VoxelCanvas: React.FC<VoxelCanvasProps> = ({
     // Damage from environmental hazards (fall, lava)
     controller.onTakeDamage = (amount, reason) => {
       sound.playHurt();
+      HapticManager.takeDamage();
       onTakeDamage?.(amount, reason);
     };
 
@@ -285,22 +352,78 @@ export const VoxelCanvas: React.FC<VoxelCanvasProps> = ({
     mobManager.onPlayerAttackedByMob = (damage, knockback) => {
       sound.playHurt();
       controller.applyKnockback(knockback.x, knockback.y, knockback.z);
-      onTakeDamage?.(damage, 'mob');
+      onTakeDamage?.(damage, "mob");
+    };
+
+    // 8.6 Initialize WorldEventManager
+    const eventManager = new WorldEventManager(scene, chunkManager, mobManager);
+    eventManagerRef.current = eventManager;
+
+    eventManager.onEventStarted = (title) => {
+      onEventNotification?.(title);
+    };
+    eventManager.onEventCompleted = (msg) => {
+      onEventNotification?.(msg);
+      if (onActiveEventUpdate) onActiveEventUpdate(null);
     };
 
     // Mob loot drop on death
     mobManager.onMobKilled = (type, pos) => {
-      if (type === 'zombie') {
-        dropManager.spawnDrop({ id: 'cooked_beef', count: 1, maxStack: 64 }, pos);
-      } else if (type === 'creeper') {
-        dropManager.spawnDrop({ id: 'coal', count: 2, maxStack: 64 }, pos);
+      eventManager.notifyMobKilled();
+      if (
+        type === "zombie" ||
+        type === "skeleton" ||
+        type === "cow" ||
+        type === "pig"
+      ) {
+        dropManager.spawnDrop(
+          { id: "cooked_beef", count: 1, maxStack: 64 },
+          pos,
+        );
+      } else if (type === "sheep") {
+        dropManager.spawnDrop(
+          { id: "cobblestone", count: 2, maxStack: 64 },
+          pos,
+        );
+      } else if (type === "creeper") {
+        dropManager.spawnDrop({ id: "coal", count: 2, maxStack: 64 }, pos);
+      } else if (type === "enderman") {
+        dropManager.spawnDrop({ id: "diamond", count: 1, maxStack: 64 }, pos);
       }
     };
 
-    // Spawn friendly Steve nearby and hostile mobs at a safe distance (~25 blocks)
-    mobManager.spawnMob('steve', new THREE.Vector3(12, groundY, 12));
-    mobManager.spawnMob('zombie', new THREE.Vector3(30, groundY, 30));
-    mobManager.spawnMob('creeper', new THREE.Vector3(-18, groundY, 22));
+    // Friendly pet food gift
+    mobManager.onFriendlyPetGiveFood = (pos, foodType) => {
+      sound.playItemPickup();
+      dropManager.spawnDrop({ id: foodType, count: 1, maxStack: 64 }, pos);
+    };
+
+    // Spawn friendly pet Steve, Alex, Miner, Knight, Engineer & numerous peaceful animals & birds across the world
+    const steveTopY = chunkManager.getTopGroundY(12, 12);
+    mobManager.spawnMob("steve", new THREE.Vector3(12, steveTopY, 12));
+    mobManager.spawnMob("alex", new THREE.Vector3(14, chunkManager.getTopGroundY(14, 10), 10));
+    mobManager.spawnMob("miner", new THREE.Vector3(-10, chunkManager.getTopGroundY(-10, 14), 14));
+    mobManager.spawnMob("knight", new THREE.Vector3(8, chunkManager.getTopGroundY(8, -12), -12));
+    mobManager.spawnMob("engineer", new THREE.Vector3(-12, chunkManager.getTopGroundY(-12, -10), -10));
+
+    const animalSpawns: [any, number, number][] = [
+      ["cow", 16, 14],
+      ["cow", -14, 18],
+      ["sheep", 6, 16],
+      ["sheep", -12, -10],
+      ["pig", 18, 8],
+      ["pig", -16, -14],
+      ["pig", 22, -8],
+      ["bird", 5, 5],
+      ["bird", -10, 12],
+      ["bird", 15, -15],
+      ["bird", -8, -8],
+    ];
+    for (const [type, sx, sz] of animalSpawns) {
+      const ty = chunkManager.getTopGroundY(sx, sz);
+      mobManager.spawnMob(type, new THREE.Vector3(sx, ty, sz));
+    }
+
     if (onMobCountUpdate) {
       onMobCountUpdate(mobManager.mobs.size);
     }
@@ -326,9 +449,9 @@ export const VoxelCanvas: React.FC<VoxelCanvasProps> = ({
     };
     const handleContextMenu = (e: MouseEvent) => e.preventDefault();
 
-    renderer.domElement.addEventListener('mousedown', handleMouseDown);
-    renderer.domElement.addEventListener('contextmenu', handleContextMenu);
-    window.addEventListener('contextmenu', handleContextMenu);
+    renderer.domElement.addEventListener("mousedown", handleMouseDown);
+    renderer.domElement.addEventListener("contextmenu", handleContextMenu);
+    window.addEventListener("contextmenu", handleContextMenu);
 
     // Resize
     const handleResize = () => {
@@ -336,7 +459,16 @@ export const VoxelCanvas: React.FC<VoxelCanvasProps> = ({
       camera.updateProjectionMatrix();
       renderer.setSize(window.innerWidth, window.innerHeight);
     };
-    window.addEventListener('resize', handleResize);
+    window.addEventListener("resize", handleResize);
+
+    // 10. Initialize WeatherEngine (Rain, Snow, Thunderstorms)
+    const weatherEngine = new WeatherEngine(scene, camera);
+    if (weather) {
+      weatherEngine.setWeather(weather);
+    }
+    weatherEngine.onWeatherChange = (newW) => {
+      if (onWeatherChange) onWeatherChange(newW);
+    };
 
     // Animation Tick Loop
     let animId: number;
@@ -344,13 +476,24 @@ export const VoxelCanvas: React.FC<VoxelCanvasProps> = ({
     let fpsTimer = performance.now();
     const clock = new THREE.Clock();
 
+    let lastNightPhase = isNight;
+    let lastPropWeather = weather;
+
     const animate = () => {
       animId = requestAnimationFrame(animate);
+
+      if (weather && weather !== lastPropWeather) {
+        lastPropWeather = weather;
+        weatherEngine.setWeather(weather);
+      }
 
       const delta = clock.getDelta();
       const elapsedTime = clock.getElapsedTime();
       waterMaterial.uniforms.u_time.value = elapsedTime;
       const now = performance.now();
+
+      // Weather Engine particle tick & lightning flash
+      weatherEngine.update(delta, controller.position);
 
       // FPS
       frameCount++;
@@ -358,6 +501,147 @@ export const VoxelCanvas: React.FC<VoxelCanvasProps> = ({
         onFpsUpdate(frameCount);
         frameCount = 0;
         fpsTimer = now;
+      }
+
+      // 3-Minute Day/Night Cycle (180s total)
+      const CYCLE_DURATION = 180;
+      const cycleTime = elapsedTime % CYCLE_DURATION;
+
+      let targetBgHex = 0x78a7ff;
+      let targetLightIntensity = 1.25;
+      let targetAmbientIntensity = 0.65;
+      const isNightNow = cycleTime >= 85 && cycleTime < 165;
+
+      if (cycleTime < 75) {
+        // Day
+        targetBgHex = 0x78a7ff;
+        targetLightIntensity = 1.25;
+        targetAmbientIntensity = 0.65;
+      } else if (cycleTime < 95) {
+        // Sunset transition (75s - 95s)
+        const t = (cycleTime - 75) / 20;
+        const dayColor = new THREE.Color(0x78a7ff);
+        const sunsetColor = new THREE.Color(0xf97316);
+        const nightColor = new THREE.Color(0x0b0e1a);
+        const currentSky =
+          t < 0.5
+            ? dayColor.lerp(sunsetColor, t * 2)
+            : sunsetColor.lerp(nightColor, (t - 0.5) * 2);
+        targetBgHex = currentSky.getHex();
+        targetLightIntensity = THREE.MathUtils.lerp(1.25, 0.2, t);
+        targetAmbientIntensity = THREE.MathUtils.lerp(0.65, 0.2, t);
+      } else if (cycleTime < 160) {
+        // Night
+        targetBgHex = 0x0b0e1a;
+        targetLightIntensity = 0.2;
+        targetAmbientIntensity = 0.2;
+      } else {
+        // Sunrise transition (160s - 180s)
+        const t = (cycleTime - 160) / 20;
+        const nightColor = new THREE.Color(0x0b0e1a);
+        const sunriseColor = new THREE.Color(0xf43f5e);
+        const dayColor = new THREE.Color(0x78a7ff);
+        const currentSky =
+          t < 0.5
+            ? nightColor.lerp(sunriseColor, t * 2)
+            : sunriseColor.lerp(dayColor, (t - 0.5) * 2);
+        targetBgHex = currentSky.getHex();
+        targetLightIntensity = THREE.MathUtils.lerp(0.2, 1.25, t);
+        targetAmbientIntensity = THREE.MathUtils.lerp(0.2, 0.65, t);
+      }
+
+      // Smoothly update environment sky fog & lights
+      scene.background = new THREE.Color(targetBgHex);
+      if (scene.fog) {
+        (scene.fog as THREE.FogExp2).color.setHex(targetBgHex);
+      }
+      if (dirLightRef.current) {
+        dirLightRef.current.intensity = targetLightIntensity;
+      }
+      if (ambientLightRef.current) {
+        ambientLightRef.current.intensity = targetAmbientIntensity;
+      }
+
+      // Handle phase change between Day and Night for mobs
+      if (isNightNow !== lastNightPhase) {
+        lastNightPhase = isNightNow;
+        mobManager.clearAll();
+        if (isNightNow) {
+          // Nighttime: Hostile monsters spawn (Zombies, Skeletons, Creepers, Endermen)!
+          const px = controller.position.x;
+          const pz = controller.position.z;
+          mobManager.spawnMob(
+            "zombie",
+            new THREE.Vector3(
+              px + 18,
+              chunkManager.getTopGroundY(px + 18, pz + 14),
+              pz + 14,
+            ),
+          );
+          mobManager.spawnMob(
+            "skeleton",
+            new THREE.Vector3(
+              px - 16,
+              chunkManager.getTopGroundY(px - 16, pz - 18),
+              pz - 18,
+            ),
+          );
+          mobManager.spawnMob(
+            "creeper",
+            new THREE.Vector3(
+              px + 12,
+              chunkManager.getTopGroundY(px + 12, pz - 20),
+              pz - 20,
+            ),
+          );
+          mobManager.spawnMob(
+            "enderman",
+            new THREE.Vector3(
+              px - 22,
+              chunkManager.getTopGroundY(px - 22, pz + 16),
+              pz + 16,
+            ),
+          );
+        } else {
+          // Daytime: Friendly pets & animals spawn (Steve, Cow, Sheep, Pig)!
+          const px = controller.position.x;
+          const pz = controller.position.z;
+          mobManager.spawnMob(
+            "steve",
+            new THREE.Vector3(
+              px + 8,
+              chunkManager.getTopGroundY(px + 8, pz + 8),
+              pz + 8,
+            ),
+          );
+          mobManager.spawnMob(
+            "cow",
+            new THREE.Vector3(
+              px - 12,
+              chunkManager.getTopGroundY(px - 12, pz - 8),
+              pz - 8,
+            ),
+          );
+          mobManager.spawnMob(
+            "sheep",
+            new THREE.Vector3(
+              px + 14,
+              chunkManager.getTopGroundY(px + 14, pz - 12),
+              pz - 12,
+            ),
+          );
+          mobManager.spawnMob(
+            "pig",
+            new THREE.Vector3(
+              px - 10,
+              chunkManager.getTopGroundY(px - 10, pz + 12),
+              pz + 12,
+            ),
+          );
+        }
+        if (onMobCountUpdate) {
+          onMobCountUpdate(mobManager.mobs.size);
+        }
       }
 
       // Update controller physics
@@ -374,13 +658,19 @@ export const VoxelCanvas: React.FC<VoxelCanvasProps> = ({
         return onCollectDrop ? onCollectDrop(item) : true;
       });
 
+      // Update Mini-game World Events
+      eventManager.update(delta, controller.position);
+      if (onActiveEventUpdate && eventManager.currentEvent) {
+        onActiveEventUpdate({ ...eventManager.currentEvent });
+      }
+
       // Dynamic Chunk Loading
       chunkManager.updateWorldAroundPlayer(
         controller.position.x,
         controller.position.z,
         renderDistance,
         scene,
-        naiveMode
+        naiveMode,
       );
 
       onStatsUpdate(chunkManager.getStats());
@@ -396,26 +686,36 @@ export const VoxelCanvas: React.FC<VoxelCanvasProps> = ({
         const hit = chunkManager.raycast(
           raycaster.ray.origin,
           raycaster.ray.direction,
-          7
+          7,
         );
 
         if (hit) {
           highlightMesh.position.set(
             hit.blockPos.x + 0.5,
             hit.blockPos.y + 0.5,
-            hit.blockPos.z + 0.5
+            hit.blockPos.z + 0.5,
           );
 
           // Visual crack effect: scale and color transition while breaking
           if (controller.breakingProgress > 0) {
-            const scale = 1.01 + controller.breakingProgress * 0.02;
+            const scale = 1.01 + controller.breakingProgress * 0.04;
             highlightMesh.scale.set(scale, scale, scale);
             (highlightMesh.material as THREE.MeshBasicMaterial).color.setHex(
-              controller.breakingProgress > 0.6 ? 0xef4444 : 0xf97316
+              controller.breakingProgress > 0.6 ? 0xef4444 : 0xf97316,
             );
+
+            // Spawn dust particles while mining
+            const targetBlockId = chunkManager.getBlockGlobal(
+              hit.blockPos.x,
+              hit.blockPos.y,
+              hit.blockPos.z,
+            );
+            particleManager.spawnDigDust(targetBlockId, highlightMesh.position);
           } else {
             highlightMesh.scale.set(1.0, 1.0, 1.0);
-            (highlightMesh.material as THREE.MeshBasicMaterial).color.setHex(0x00ffcc);
+            (highlightMesh.material as THREE.MeshBasicMaterial).color.setHex(
+              0x00ffcc,
+            );
           }
 
           highlightMesh.visible = true;
@@ -426,6 +726,9 @@ export const VoxelCanvas: React.FC<VoxelCanvasProps> = ({
         highlightMesh.visible = false;
       }
 
+      // Update 3D Block Breaking & Destruction Particles
+      particleManager.update(delta);
+
       renderer.render(scene, camera);
     };
 
@@ -433,12 +736,12 @@ export const VoxelCanvas: React.FC<VoxelCanvasProps> = ({
 
     return () => {
       cancelAnimationFrame(animId);
-      window.removeEventListener('resize', handleResize);
-      renderer.domElement.removeEventListener('mousedown', handleMouseDown);
-      renderer.domElement.removeEventListener('contextmenu', handleContextMenu);
-      window.removeEventListener('contextmenu', handleContextMenu);
+      window.removeEventListener("resize", handleResize);
+      renderer.domElement.removeEventListener("mousedown", handleMouseDown);
+      renderer.domElement.removeEventListener("contextmenu", handleContextMenu);
+      window.removeEventListener("contextmenu", handleContextMenu);
       if (mountRef.current) {
-        mountRef.current.innerHTML = '';
+        mountRef.current.innerHTML = "";
       }
       renderer.dispose();
     };
@@ -462,7 +765,7 @@ export const VoxelCanvas: React.FC<VoxelCanvasProps> = ({
   // Dynamic Day / Night Lighting Transition
   useEffect(() => {
     if (sceneRef.current && chunkManagerRef.current) {
-      const bgColor = isNight ? '#0b0e1a' : '#78a7ff';
+      const bgColor = isNight ? "#0b0e1a" : "#78a7ff";
       sceneRef.current.background = new THREE.Color(bgColor);
       if (sceneRef.current.fog) {
         sceneRef.current.fog.color.set(bgColor);
@@ -473,7 +776,10 @@ export const VoxelCanvas: React.FC<VoxelCanvasProps> = ({
       if (ambientLightRef.current) {
         ambientLightRef.current.intensity = isNight ? 0.2 : 0.65;
       }
-      chunkManagerRef.current.setSkyIntensity(isNight ? 0.15 : 1.0, sceneRef.current);
+      chunkManagerRef.current.setSkyIntensity(
+        isNight ? 0.15 : 1.0,
+        sceneRef.current,
+      );
       controllerRef.current?.netManager?.sendSetNight(isNight);
     }
   }, [isNight]);
@@ -492,6 +798,17 @@ export const VoxelCanvas: React.FC<VoxelCanvasProps> = ({
     }
   }, [enableAO]);
 
+  // Trigger World Event
+  useEffect(() => {
+    if (triggerEvent && eventManagerRef.current && controllerRef.current) {
+      const evt = eventManagerRef.current.startEvent(
+        triggerEvent,
+        controllerRef.current.position,
+      );
+      if (onActiveEventUpdate) onActiveEventUpdate(evt);
+    }
+  }, [triggerEvent]);
+
   // Spawn Mob Event
   useEffect(() => {
     if (spawnMobTrigger && mobManagerRef.current && controllerRef.current) {
@@ -499,9 +816,16 @@ export const VoxelCanvas: React.FC<VoxelCanvasProps> = ({
       controllerRef.current.camera.getWorldDirection(dir);
       dir.y = 0;
       dir.normalize();
-      const spawnPos = controllerRef.current.position.clone().add(dir.multiplyScalar(3.5));
+      const spawnPos = controllerRef.current.position
+        .clone()
+        .add(dir.multiplyScalar(3.5));
       mobManagerRef.current.spawnMob(spawnMobTrigger.type, spawnPos);
-      controllerRef.current.netManager?.sendSpawnMob(spawnMobTrigger.type, spawnPos.x, spawnPos.y, spawnPos.z);
+      controllerRef.current.netManager?.sendSpawnMob(
+        spawnMobTrigger.type,
+        spawnPos.x,
+        spawnPos.y,
+        spawnPos.z,
+      );
       if (onMobCountUpdate) {
         onMobCountUpdate(mobManagerRef.current.mobs.size);
       }
@@ -532,19 +856,25 @@ export const VoxelCanvas: React.FC<VoxelCanvasProps> = ({
 
   // Handle Death: scatter dropped items at the player's death position
   useEffect(() => {
-    if (deathScatterTrigger && dropManagerRef.current && controllerRef.current) {
+    if (
+      deathScatterTrigger &&
+      dropManagerRef.current &&
+      controllerRef.current
+    ) {
       const deathPos = controllerRef.current.position.clone();
       for (const item of deathScatterTrigger.items) {
         if (item && item.count > 0) {
           dropManagerRef.current.spawnDrop(
             { ...item },
-            deathPos.clone().add(
-              new THREE.Vector3(
-                (Math.random() - 0.5) * 2.0,
-                0.5 + Math.random() * 0.8,
-                (Math.random() - 0.5) * 2.0
-              )
-            )
+            deathPos
+              .clone()
+              .add(
+                new THREE.Vector3(
+                  (Math.random() - 0.5) * 2.0,
+                  0.5 + Math.random() * 0.8,
+                  (Math.random() - 0.5) * 2.0,
+                ),
+              ),
           );
         }
       }
@@ -557,6 +887,19 @@ export const VoxelCanvas: React.FC<VoxelCanvasProps> = ({
       controllerRef.current.canSprint = canSprint;
     }
   }, [canSprint]);
+
+  // Trigger World Events on demand
+  useEffect(() => {
+    if (triggerEvent && eventManagerRef.current && controllerRef.current) {
+      const activeEv = eventManagerRef.current.startEvent(
+        triggerEvent,
+        controllerRef.current.position,
+      );
+      if (onActiveEventUpdate) {
+        onActiveEventUpdate({ ...activeEv });
+      }
+    }
+  }, [triggerEvent]);
 
   return (
     <div className="w-full h-full relative">
@@ -589,7 +932,7 @@ export const VoxelCanvas: React.FC<VoxelCanvasProps> = ({
                 cx="20"
                 cy="20"
                 r="16"
-                stroke={breakingProgress > 0.7 ? '#ef4444' : '#f59e0b'}
+                stroke={breakingProgress > 0.7 ? "#ef4444" : "#f59e0b"}
                 strokeWidth="3.5"
                 fill="none"
                 strokeDasharray={100}
@@ -612,8 +955,12 @@ export const VoxelCanvas: React.FC<VoxelCanvasProps> = ({
             <MousePointer className="w-5 h-5" />
           </div>
           <div className="flex flex-col text-left">
-            <span className="text-sm font-bold text-emerald-300">Кликните по экрану</span>
-            <span className="text-xs text-slate-300">Включить обзор мышью & управление (ESC — выключить)</span>
+            <span className="text-sm font-bold text-emerald-300">
+              Кликните по экрану
+            </span>
+            <span className="text-xs text-slate-300">
+              Включить обзор мышью & управление (ESC — выключить)
+            </span>
           </div>
         </div>
       )}

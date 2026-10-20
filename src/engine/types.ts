@@ -22,16 +22,23 @@ export const BLOCK = {
   PLANKS: 10,
   TORCH: 11,
   LAVA: 12,
+  CRAFTING_TABLE: 13,
+  COAL_ORE: 14,
+  IRON_ORE: 15,
+  GOLD_ORE: 16,
+  DIAMOND_ORE: 17,
+  REDSTONE_ORE: 18,
 } as const;
 
-export type BlockId = typeof BLOCK[keyof typeof BLOCK];
+export type BlockId = (typeof BLOCK)[keyof typeof BLOCK];
 
 export interface BlockInfo {
   id: number;
   name: string;
   transparent: boolean;
+  solid?: boolean; // If false, player can walk through (Air, Water, Torch, Lava)
   lightEmission?: number; // 0 to 15
-  lightDamping?: number;  // 0 to 15 (opaque blocks = 15)
+  lightDamping?: number; // 0 to 15 (opaque blocks = 15)
   tiles: {
     top: number;
     bottom: number;
@@ -43,22 +50,151 @@ export interface BlockInfo {
 export const ATLAS_GRID_SIZE = 8;
 
 export const BLOCK_DEFS: Record<number, BlockInfo> = {
-  [BLOCK.AIR]: { id: 0, name: 'Air', transparent: true, lightEmission: 0, lightDamping: 0, tiles: { top: 0, bottom: 0, sides: 0 } },
-  [BLOCK.STONE]: { id: 1, name: 'Stone', transparent: false, tiles: { top: 1, bottom: 1, sides: 1 } },
-  [BLOCK.DIRT]: { id: 2, name: 'Dirt', transparent: false, tiles: { top: 2, bottom: 2, sides: 2 } },
-  [BLOCK.GRASS]: { id: 3, name: 'Grass', transparent: false, tiles: { top: 3, bottom: 2, sides: 4 } }, // 3=Grass top, 2=Dirt bottom, 4=Grass side
-  [BLOCK.WOOD]: { id: 4, name: 'Wood Log', transparent: false, tiles: { top: 6, bottom: 6, sides: 5 } },
-  [BLOCK.LEAVES]: { id: 5, name: 'Leaves', transparent: true, lightDamping: 1, tiles: { top: 7, bottom: 7, sides: 7 } },
-  [BLOCK.SAND]: { id: 6, name: 'Sand', transparent: false, tiles: { top: 8, bottom: 8, sides: 8 } },
-  [BLOCK.WATER]: { id: 7, name: 'Water', transparent: true, lightDamping: 2, tiles: { top: 9, bottom: 9, sides: 9 } },
-  [BLOCK.BRICK]: { id: 8, name: 'Red Brick', transparent: false, tiles: { top: 10, bottom: 10, sides: 10 } },
-  [BLOCK.GLASS]: { id: 9, name: 'Glass', transparent: true, lightDamping: 0, tiles: { top: 11, bottom: 11, sides: 11 } },
-  [BLOCK.PLANKS]: { id: 10, name: 'Wooden Planks', transparent: false, tiles: { top: 12, bottom: 12, sides: 12 } },
-  [BLOCK.TORCH]: { id: 11, name: 'Torch', transparent: true, lightEmission: 14, lightDamping: 0, tiles: { top: 13, bottom: 13, sides: 13 } },
-  [BLOCK.LAVA]: { id: 12, name: 'Lava', transparent: false, lightEmission: 15, lightDamping: 0, tiles: { top: 14, bottom: 14, sides: 14 } },
+  [BLOCK.AIR]: {
+    id: 0,
+    name: "Air",
+    transparent: true,
+    solid: false,
+    lightEmission: 0,
+    lightDamping: 0,
+    tiles: { top: 0, bottom: 0, sides: 0 },
+  },
+  [BLOCK.STONE]: {
+    id: 1,
+    name: "Stone",
+    transparent: false,
+    solid: true,
+    tiles: { top: 1, bottom: 1, sides: 1 },
+  },
+  [BLOCK.DIRT]: {
+    id: 2,
+    name: "Dirt",
+    transparent: false,
+    solid: true,
+    tiles: { top: 2, bottom: 2, sides: 2 },
+  },
+  [BLOCK.GRASS]: {
+    id: 3,
+    name: "Grass",
+    transparent: false,
+    solid: true,
+    tiles: { top: 3, bottom: 2, sides: 4 },
+  }, // 3=Grass top, 2=Dirt bottom, 4=Grass side
+  [BLOCK.WOOD]: {
+    id: 4,
+    name: "Wood Log",
+    transparent: false,
+    solid: true,
+    tiles: { top: 6, bottom: 6, sides: 5 },
+  },
+  [BLOCK.LEAVES]: {
+    id: 5,
+    name: "Leaves",
+    transparent: true,
+    solid: true,
+    lightDamping: 1,
+    tiles: { top: 7, bottom: 7, sides: 7 },
+  },
+  [BLOCK.SAND]: {
+    id: 6,
+    name: "Sand",
+    transparent: false,
+    solid: true,
+    tiles: { top: 8, bottom: 8, sides: 8 },
+  },
+  [BLOCK.WATER]: {
+    id: 7,
+    name: "Water",
+    transparent: true,
+    solid: false,
+    lightDamping: 2,
+    tiles: { top: 9, bottom: 9, sides: 9 },
+  },
+  [BLOCK.BRICK]: {
+    id: 8,
+    name: "Red Brick",
+    transparent: false,
+    solid: true,
+    tiles: { top: 10, bottom: 10, sides: 10 },
+  },
+  [BLOCK.GLASS]: {
+    id: 9,
+    name: "Glass",
+    transparent: true,
+    solid: true,
+    lightDamping: 0,
+    tiles: { top: 11, bottom: 11, sides: 11 },
+  },
+  [BLOCK.PLANKS]: {
+    id: 10,
+    name: "Wooden Planks",
+    transparent: false,
+    solid: true,
+    tiles: { top: 12, bottom: 12, sides: 12 },
+  },
+  [BLOCK.TORCH]: {
+    id: 11,
+    name: "Torch",
+    transparent: true,
+    solid: false,
+    lightEmission: 14,
+    lightDamping: 0,
+    tiles: { top: 13, bottom: 13, sides: 13 },
+  },
+  [BLOCK.LAVA]: {
+    id: 12,
+    name: "Lava",
+    transparent: false,
+    solid: false,
+    lightEmission: 15,
+    lightDamping: 0,
+    tiles: { top: 14, bottom: 14, sides: 14 },
+  },
+  [BLOCK.CRAFTING_TABLE]: {
+    id: 13,
+    name: "Crafting Table",
+    transparent: false,
+    solid: true,
+    tiles: { top: 15, bottom: 12, sides: 15 },
+  },
+  [BLOCK.COAL_ORE]: {
+    id: 14,
+    name: "Coal Ore",
+    transparent: false,
+    solid: true,
+    tiles: { top: 16, bottom: 16, sides: 16 },
+  },
+  [BLOCK.IRON_ORE]: {
+    id: 15,
+    name: "Iron Ore",
+    transparent: false,
+    solid: true,
+    tiles: { top: 17, bottom: 17, sides: 17 },
+  },
+  [BLOCK.GOLD_ORE]: {
+    id: 16,
+    name: "Gold Ore",
+    transparent: false,
+    solid: true,
+    tiles: { top: 18, bottom: 18, sides: 18 },
+  },
+  [BLOCK.DIAMOND_ORE]: {
+    id: 17,
+    name: "Diamond Ore",
+    transparent: false,
+    solid: true,
+    tiles: { top: 19, bottom: 19, sides: 19 },
+  },
+  [BLOCK.REDSTONE_ORE]: {
+    id: 18,
+    name: "Redstone Ore",
+    transparent: false,
+    solid: true,
+    tiles: { top: 20, bottom: 20, sides: 20 },
+  },
 };
 
-export type FaceDirection = 'px' | 'nx' | 'py' | 'ny' | 'pz' | 'nz';
+export type FaceDirection = "px" | "nx" | "py" | "ny" | "pz" | "nz";
 
 export interface FaceData {
   dir: [number, number, number];
@@ -66,10 +202,10 @@ export interface FaceData {
     [number, number, number],
     [number, number, number],
     [number, number, number],
-    [number, number, number]
+    [number, number, number],
   ];
   uvs: [number, number][];
-  faceName: 'sides' | 'top' | 'bottom';
+  faceName: "sides" | "top" | "bottom";
 }
 
 export interface ChunkStats {

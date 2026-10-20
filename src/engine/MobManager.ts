@@ -1,19 +1,37 @@
-import * as THREE from 'three';
-import { EntityModelBuilder, HumanoidParts, CreeperParts } from './EntityModelBuilder';
+import * as THREE from "three";
+import {
+  EntityModelBuilder,
+  HumanoidParts,
+  CreeperParts,
+  BirdParts,
+} from "./EntityModelBuilder";
 
-export type MobType = 'zombie' | 'creeper' | 'steve';
+export type MobType =
+  | "zombie"
+  | "creeper"
+  | "steve"
+  | "alex"
+  | "miner"
+  | "knight"
+  | "engineer"
+  | "skeleton"
+  | "enderman"
+  | "cow"
+  | "sheep"
+  | "pig"
+  | "bird";
 
 export interface ActiveMob {
   id: string;
   type: MobType;
-  parts: HumanoidParts | CreeperParts;
+  parts: any;
   meshGroup: THREE.Group;
   position: THREE.Vector3;
   velocity: THREE.Vector3;
   rotationY: number;
   targetRotationY: number;
   targetPos: THREE.Vector3 | null;
-  state: 'idle' | 'wander' | 'chase' | 'fusing';
+  state: "idle" | "wander" | "chase" | "fusing";
   stateTimer: number;
   fuseTimer: number; // For Creeper countdown (1.5s)
   health: number;
@@ -26,19 +44,37 @@ export interface ActiveMob {
 export class MobManager {
   public mobs: Map<string, ActiveMob> = new Map();
   private scene: THREE.Scene;
+  private chunkManager?: any;
   private zombieMaterial: THREE.MeshLambertMaterial;
   private creeperMaterial: THREE.MeshLambertMaterial;
   private playerMaterial: THREE.MeshLambertMaterial;
+  private skeletonMaterial: THREE.MeshLambertMaterial;
+  private endermanMaterial: THREE.MeshLambertMaterial;
+  private cowMaterial: THREE.MeshLambertMaterial;
+  private sheepMaterial: THREE.MeshLambertMaterial;
+  private pigMaterial: THREE.MeshLambertMaterial;
+  private birdMaterial: THREE.MeshLambertMaterial;
 
   // Callbacks
-  public onPlayerAttackedByMob?: (damage: number, knockback: { x: number; y: number; z: number }) => void;
+  public onPlayerAttackedByMob?: (
+    damage: number,
+    knockback: { x: number; y: number; z: number },
+  ) => void;
   public onMobKilled?: (type: MobType, pos: THREE.Vector3) => void;
+  public onFriendlyPetGiveFood?: (pos: THREE.Vector3, foodType: string) => void;
 
-  constructor(scene: THREE.Scene, _chunkManager?: any) {
+  constructor(scene: THREE.Scene, chunkManager?: any) {
     this.scene = scene;
-    this.zombieMaterial = EntityModelBuilder.createMobMaterial('zombie');
-    this.creeperMaterial = EntityModelBuilder.createMobMaterial('creeper');
-    this.playerMaterial = EntityModelBuilder.createMobMaterial('player');
+    this.chunkManager = chunkManager;
+    this.zombieMaterial = EntityModelBuilder.createMobMaterial("zombie");
+    this.creeperMaterial = EntityModelBuilder.createMobMaterial("creeper");
+    this.playerMaterial = EntityModelBuilder.createMobMaterial("player");
+    this.skeletonMaterial = EntityModelBuilder.createMobMaterial("skeleton");
+    this.endermanMaterial = EntityModelBuilder.createMobMaterial("enderman");
+    this.cowMaterial = EntityModelBuilder.createMobMaterial("cow");
+    this.sheepMaterial = EntityModelBuilder.createMobMaterial("sheep");
+    this.pigMaterial = EntityModelBuilder.createMobMaterial("pig");
+    this.birdMaterial = EntityModelBuilder.createMobMaterial("bird");
   }
 
   public clearAllMobs(): void {
@@ -50,7 +86,7 @@ export class MobManager {
    */
   public hitMobAtRay(
     camera: THREE.PerspectiveCamera,
-    weaponDamage: number = 4
+    weaponDamage: number = 4,
   ): { hit: boolean; mobType?: string; isDead?: boolean } {
     const rayOrigin = camera.position;
     const rayDir = new THREE.Vector3();
@@ -110,18 +146,60 @@ export class MobManager {
 
   public spawnMob(type: MobType, position: THREE.Vector3): ActiveMob {
     const id = `mob_${type}_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
-    let parts: HumanoidParts | CreeperParts;
+    let parts: any;
     let mat: THREE.MeshLambertMaterial;
 
-    if (type === 'zombie') {
+    if (
+      this.chunkManager &&
+      typeof this.chunkManager.getTopGroundY === "function"
+    ) {
+      const topY = this.chunkManager.getTopGroundY(position.x, position.z);
+      position.y = topY;
+    }
+
+    if (type === "zombie") {
       mat = this.zombieMaterial.clone();
-      parts = EntityModelBuilder.buildHumanoid(mat, 'zombie');
-    } else if (type === 'steve') {
+      parts = EntityModelBuilder.buildHumanoid(mat, "zombie");
+    } else if (type === "steve") {
       mat = this.playerMaterial.clone();
-      parts = EntityModelBuilder.buildHumanoid(mat, 'player');
-    } else {
+      parts = EntityModelBuilder.buildSteveCompanion(mat);
+    } else if (type === "alex") {
+      mat = EntityModelBuilder.createMobMaterial("alex");
+      parts = EntityModelBuilder.buildSteveCompanion(mat);
+    } else if (type === "miner") {
+      mat = EntityModelBuilder.createMobMaterial("miner");
+      parts = EntityModelBuilder.buildSteveCompanion(mat);
+    } else if (type === "knight") {
+      mat = EntityModelBuilder.createMobMaterial("knight");
+      parts = EntityModelBuilder.buildSteveCompanion(mat);
+    } else if (type === "engineer") {
+      mat = EntityModelBuilder.createMobMaterial("engineer");
+      parts = EntityModelBuilder.buildSteveCompanion(mat);
+    } else if (type === "skeleton") {
+      mat = this.skeletonMaterial.clone();
+      parts = EntityModelBuilder.buildHumanoid(mat, "skeleton");
+    } else if (type === "enderman") {
+      mat = this.endermanMaterial.clone();
+      parts = EntityModelBuilder.buildHumanoid(mat, "enderman", 1 / 12); // taller scale
+    } else if (type === "creeper") {
       mat = this.creeperMaterial.clone();
       parts = EntityModelBuilder.buildCreeper(mat);
+    } else if (type === "cow") {
+      mat = this.cowMaterial.clone();
+      parts = EntityModelBuilder.buildQuadruped(mat, "cow");
+    } else if (type === "sheep") {
+      mat = this.sheepMaterial.clone();
+      parts = EntityModelBuilder.buildQuadruped(mat, "sheep");
+    } else if (type === "pig") {
+      mat = this.pigMaterial.clone();
+      parts = EntityModelBuilder.buildQuadruped(mat, "pig");
+    } else if (type === "bird") {
+      mat = this.birdMaterial.clone();
+      parts = EntityModelBuilder.buildBird(mat);
+      position.y = Math.max(position.y + 12, 32);
+    } else {
+      mat = this.pigMaterial.clone();
+      parts = EntityModelBuilder.buildQuadruped(mat, "pig");
     }
 
     parts.group.position.copy(position);
@@ -137,7 +215,7 @@ export class MobManager {
       rotationY: Math.random() * Math.PI * 2,
       targetRotationY: 0,
       targetPos: null,
-      state: 'wander',
+      state: "wander",
       stateTimer: 2 + Math.random() * 3,
       fuseTimer: 0,
       health: 20,
@@ -158,7 +236,7 @@ export class MobManager {
   public update(
     deltaTime: number,
     playerPosition: THREE.Vector3,
-    onExplosion?: (pos: THREE.Vector3, radius: number) => void
+    onExplosion?: (pos: THREE.Vector3, radius: number) => void,
   ): void {
     const toRemove: string[] = [];
 
@@ -173,14 +251,97 @@ export class MobManager {
         mob.attackCooldown -= deltaTime;
       }
 
-      // Simple AI state logic
-      if (distToPlayer < 14) {
-        mob.state = 'chase';
+      // Peaceful animals & birds wander on their own independently of player
+      if (
+        mob.type === "cow" ||
+        mob.type === "sheep" ||
+        mob.type === "pig" ||
+        mob.type === "bird"
+      ) {
+        if (mob.stateTimer <= 0) {
+          if (mob.state === "idle") {
+            mob.state = "wander";
+            mob.targetRotationY = Math.random() * Math.PI * 2;
+            mob.walkSpeed = mob.type === "bird" ? 0.7 : 0.4;
+            mob.stateTimer = 4 + Math.random() * 5;
+          } else {
+            mob.state = "idle";
+            mob.walkSpeed = 0;
+            mob.stateTimer = 2 + Math.random() * 3;
+          }
+        }
+      } else if (mob.type === "steve") {
+        if (distToPlayer < 3.0) {
+          // Close to player: stop walking and stand politely facing player
+          mob.walkSpeed = 0;
+          mob.targetRotationY = Math.atan2(dx, dz);
+          mob.state = "idle";
+
+          // Give food gift if cooldown ready
+          if (distToPlayer < 2.8 && mob.attackCooldown <= 0) {
+            mob.attackCooldown = 15.0; // 15s gift cooldown
+            if (this.onFriendlyPetGiveFood) {
+              const foods = ["cooked_beef", "bread", "apple"];
+              const randomFood =
+                foods[Math.floor(Math.random() * foods.length)];
+              this.onFriendlyPetGiveFood(mob.position.clone(), randomFood);
+            }
+          }
+        } else if (distToPlayer < 16) {
+          // Follow player at friendly distance
+          mob.state = "chase";
+          mob.targetRotationY = Math.atan2(dx, dz);
+          mob.walkSpeed = 0.6;
+        } else {
+          // Wander peacefully
+          if (mob.stateTimer <= 0) {
+            mob.state = mob.state === "idle" ? "wander" : "idle";
+            mob.targetRotationY = Math.random() * Math.PI * 2;
+            mob.walkSpeed = mob.state === "wander" ? 0.4 : 0;
+            mob.stateTimer = 3 + Math.random() * 3;
+          }
+        }
+      } else if (distToPlayer < 16) {
+        // Hostile monsters (Zombie, Creeper, Skeleton, Enderman) chase aggressively
+        mob.state = "chase";
         mob.targetRotationY = Math.atan2(dx, dz);
-        mob.walkSpeed = 1.0;
+
+        if (mob.type === "skeleton") {
+          // Skeleton keeps 8-12 block archery distance and shoots arrows
+          mob.walkSpeed = distToPlayer < 7 ? 0 : 0.7;
+          if (mob.attackCooldown <= 0) {
+            mob.attackCooldown = 2.0; // 2s arrow shot
+            const kx = Math.sin(mob.rotationY) * 2.5;
+            const kz = Math.cos(mob.rotationY) * 2.5;
+            if (this.onPlayerAttackedByMob) {
+              this.onPlayerAttackedByMob(2, { x: kx, y: 2.2, z: kz });
+            }
+          }
+        } else if (mob.type === "enderman") {
+          // Enderman moves fast and teleports on hit
+          mob.walkSpeed = 1.3;
+          if (distToPlayer < 1.8 && mob.attackCooldown <= 0) {
+            mob.attackCooldown = 1.0;
+            const kx = Math.sin(mob.rotationY) * 4.5;
+            const kz = Math.cos(mob.rotationY) * 4.5;
+            if (this.onPlayerAttackedByMob) {
+              this.onPlayerAttackedByMob(4, { x: kx, y: 3.5, z: kz });
+            }
+            // Teleport nearby
+            const tpAngle = Math.random() * Math.PI * 2;
+            mob.position.x += Math.cos(tpAngle) * 7.0;
+            mob.position.z += Math.sin(tpAngle) * 7.0;
+          }
+        } else {
+          mob.walkSpeed = 1.0;
+        }
 
         // Zombie Melee Attack (< 1.4 blocks)
-        if (mob.type === 'zombie' && distToPlayer < 1.4 && mob.attackCooldown <= 0) {
+        if (
+          mob.type === "zombie" &&
+          distToPlayer < 1.4 &&
+          mob.attackCooldown <= 0
+        ) {
           mob.attackCooldown = 1.0; // 1s attack cooldown
           const kx = Math.sin(mob.rotationY) * 3.5;
           const kz = Math.cos(mob.rotationY) * 3.5;
@@ -190,9 +351,9 @@ export class MobManager {
         }
 
         // Creeper close fuse logic
-        if (mob.type === 'creeper') {
+        if (mob.type === "creeper") {
           if (distToPlayer < 3.2) {
-            mob.state = 'fusing';
+            mob.state = "fusing";
             mob.walkSpeed = 0.2;
             mob.fuseTimer += deltaTime;
 
@@ -206,12 +367,20 @@ export class MobManager {
               if (onExplosion) {
                 onExplosion(mob.position.clone(), 3.5);
               }
-              // Deal explosion damage to player if within blast radius
               if (distToPlayer < 5.0 && this.onPlayerAttackedByMob) {
-                const explosionDamage = Math.max(2, Math.floor(18 * (1.0 - distToPlayer / 5.0)));
-                const dirX = (playerPosition.x - mob.position.x) / (distToPlayer || 1);
-                const dirZ = (playerPosition.z - mob.position.z) / (distToPlayer || 1);
-                this.onPlayerAttackedByMob(explosionDamage, { x: dirX * 6.5, y: 4.8, z: dirZ * 6.5 });
+                const explosionDamage = Math.max(
+                  2,
+                  Math.floor(18 * (1.0 - distToPlayer / 5.0)),
+                );
+                const dirX =
+                  (playerPosition.x - mob.position.x) / (distToPlayer || 1);
+                const dirZ =
+                  (playerPosition.z - mob.position.z) / (distToPlayer || 1);
+                this.onPlayerAttackedByMob(explosionDamage, {
+                  x: dirX * 6.5,
+                  y: 4.8,
+                  z: dirZ * 6.5,
+                });
               }
               return;
             }
@@ -223,13 +392,13 @@ export class MobManager {
       } else {
         // Wandering / Idle
         if (mob.stateTimer <= 0) {
-          if (mob.state === 'idle') {
-            mob.state = 'wander';
+          if (mob.state === "idle") {
+            mob.state = "wander";
             mob.targetRotationY = Math.random() * Math.PI * 2;
             mob.walkSpeed = 0.5;
             mob.stateTimer = 3 + Math.random() * 4;
           } else {
-            mob.state = 'idle';
+            mob.state = "idle";
             mob.walkSpeed = 0;
             mob.stateTimer = 2 + Math.random() * 2;
           }
@@ -245,28 +414,68 @@ export class MobManager {
 
       // Move forward if walking
       if (mob.walkSpeed > 0.05) {
-        const speed = mob.walkSpeed * (mob.type === 'creeper' ? 2.5 : 2.2);
+        const speed = mob.walkSpeed * (mob.type === "creeper" ? 2.5 : 2.2);
         mob.position.x += Math.sin(mob.rotationY) * speed * deltaTime;
         mob.position.z += Math.cos(mob.rotationY) * speed * deltaTime;
         mob.walkCycle += deltaTime * 8.0 * mob.walkSpeed;
       }
 
+      // Ground / Flight altitude alignment
+      if (
+        this.chunkManager &&
+        typeof this.chunkManager.getTopGroundY === "function"
+      ) {
+        const topY = this.chunkManager.getTopGroundY(
+          mob.position.x,
+          mob.position.z,
+        );
+        if (mob.type === "bird") {
+          const targetFlyY = topY + 14 + Math.sin(mob.walkCycle * 0.4) * 3;
+          mob.position.y = THREE.MathUtils.lerp(
+            mob.position.y,
+            targetFlyY,
+            Math.min(1.0, deltaTime * 4.0),
+          );
+        } else {
+          if (mob.position.y < topY) {
+            mob.position.y = topY;
+          } else {
+            mob.position.y = THREE.MathUtils.lerp(
+              mob.position.y,
+              topY,
+              Math.min(1.0, deltaTime * 12.0),
+            );
+          }
+        }
+      }
+
       mob.meshGroup.position.copy(mob.position);
 
-      // Animate limb swings procedurally via EntityModelBuilder
-      if (mob.type === 'zombie') {
-        EntityModelBuilder.animateHumanoidWalk(
-          mob.parts as HumanoidParts,
+      // Animate limb swings / wings procedurally via EntityModelBuilder
+      if (mob.type === "cow" || mob.type === "sheep" || mob.type === "pig") {
+        EntityModelBuilder.animateQuadrupedWalk(
+          mob.parts,
           mob.walkCycle,
-          mob.walkSpeed
+          mob.walkSpeed,
         );
-      } else if (mob.type === 'creeper') {
+      } else if (mob.type === "bird") {
+        EntityModelBuilder.animateBirdFlight(
+          mob.parts as BirdParts,
+          mob.walkCycle,
+        );
+      } else if (mob.type === "creeper") {
         const fuseProgress = Math.min(1.0, mob.fuseTimer / 1.5);
         EntityModelBuilder.animateCreeperWalk(
           mob.parts as CreeperParts,
           mob.walkCycle,
           mob.walkSpeed,
-          fuseProgress
+          fuseProgress,
+        );
+      } else {
+        EntityModelBuilder.animateHumanoidWalk(
+          mob.parts as HumanoidParts,
+          mob.walkCycle,
+          mob.walkSpeed,
         );
       }
     });

@@ -1,4 +1,4 @@
-import * as THREE from 'three';
+import * as THREE from "three";
 import {
   CHUNK_SIZE_X,
   CHUNK_SIZE_Y,
@@ -6,15 +6,15 @@ import {
   BLOCK_DEFS,
   BLOCK,
   BlockId,
-} from './types';
-import { getTileUVs } from './TextureAtlas';
+} from "./types";
+import { getTileUVs } from "./TextureAtlas";
 import {
   calculateVertexAO,
   computeVertexColor,
   unpackSky,
   unpackBlock,
   isLightTransparent,
-} from './LightingEngine';
+} from "./LightingEngine";
 
 // Face Directions with normals, names, corner positions, and AO neighbor offsets
 export const FACES = [
@@ -22,7 +22,7 @@ export const FACES = [
     // +X (Right / East)
     dir: [1, 0, 0] as [number, number, number],
     normal: [1, 0, 0],
-    faceName: 'sides' as const,
+    faceName: "sides" as const,
     dirTint: 0.82,
     corners: [
       [1, 0, 1],
@@ -31,17 +31,33 @@ export const FACES = [
       [1, 1, 1],
     ] as const,
     aoOffsets: [
-      [[1, 0, 1], [1, -1, 0], [1, -1, 1]],
-      [[1, 0, -1], [1, -1, 0], [1, -1, -1]],
-      [[1, 0, -1], [1, 1, 0], [1, 1, -1]],
-      [[1, 0, 1], [1, 1, 0], [1, 1, 1]],
+      [
+        [1, 0, 1],
+        [1, -1, 0],
+        [1, -1, 1],
+      ],
+      [
+        [1, 0, -1],
+        [1, -1, 0],
+        [1, -1, -1],
+      ],
+      [
+        [1, 0, -1],
+        [1, 1, 0],
+        [1, 1, -1],
+      ],
+      [
+        [1, 0, 1],
+        [1, 1, 0],
+        [1, 1, 1],
+      ],
     ],
   },
   {
     // -X (Left / West)
     dir: [-1, 0, 0] as [number, number, number],
     normal: [-1, 0, 0],
-    faceName: 'sides' as const,
+    faceName: "sides" as const,
     dirTint: 0.82,
     corners: [
       [0, 0, 0],
@@ -50,17 +66,33 @@ export const FACES = [
       [0, 1, 0],
     ] as const,
     aoOffsets: [
-      [[-1, 0, -1], [-1, -1, 0], [-1, -1, -1]],
-      [[-1, 0, 1], [-1, -1, 0], [-1, -1, 1]],
-      [[-1, 0, 1], [-1, 1, 0], [-1, 1, 1]],
-      [[-1, 0, -1], [-1, 1, 0], [-1, 1, -1]],
+      [
+        [-1, 0, -1],
+        [-1, -1, 0],
+        [-1, -1, -1],
+      ],
+      [
+        [-1, 0, 1],
+        [-1, -1, 0],
+        [-1, -1, 1],
+      ],
+      [
+        [-1, 0, 1],
+        [-1, 1, 0],
+        [-1, 1, 1],
+      ],
+      [
+        [-1, 0, -1],
+        [-1, 1, 0],
+        [-1, 1, -1],
+      ],
     ],
   },
   {
     // +Y (Top / Up)
     dir: [0, 1, 0] as [number, number, number],
     normal: [0, 1, 0],
-    faceName: 'top' as const,
+    faceName: "top" as const,
     dirTint: 1.0,
     corners: [
       [0, 1, 1],
@@ -69,17 +101,33 @@ export const FACES = [
       [0, 1, 0],
     ] as const,
     aoOffsets: [
-      [[-1, 1, 0], [0, 1, 1], [-1, 1, 1]],
-      [[1, 1, 0], [0, 1, 1], [1, 1, 1]],
-      [[1, 1, 0], [0, 1, -1], [1, 1, -1]],
-      [[-1, 1, 0], [0, 1, -1], [-1, 1, -1]],
+      [
+        [-1, 1, 0],
+        [0, 1, 1],
+        [-1, 1, 1],
+      ],
+      [
+        [1, 1, 0],
+        [0, 1, 1],
+        [1, 1, 1],
+      ],
+      [
+        [1, 1, 0],
+        [0, 1, -1],
+        [1, 1, -1],
+      ],
+      [
+        [-1, 1, 0],
+        [0, 1, -1],
+        [-1, 1, -1],
+      ],
     ],
   },
   {
     // -Y (Bottom / Down)
     dir: [0, -1, 0] as [number, number, number],
     normal: [0, -1, 0],
-    faceName: 'bottom' as const,
+    faceName: "bottom" as const,
     dirTint: 0.55,
     corners: [
       [0, 0, 0],
@@ -88,18 +136,34 @@ export const FACES = [
       [0, 0, 1],
     ] as const,
     aoOffsets: [
-      [[-1, -1, 0], [0, -1, -1], [-1, -1, -1]],
-      [[1, -1, 0], [0, -1, -1], [1, -1, -1]],
-      [[1, -1, 0], [0, -1, 1], [1, -1, 1]],
-      [[-1, -1, 0], [0, -1, 1], [-1, -1, 1]],
+      [
+        [-1, -1, 0],
+        [0, -1, -1],
+        [-1, -1, -1],
+      ],
+      [
+        [1, -1, 0],
+        [0, -1, -1],
+        [1, -1, -1],
+      ],
+      [
+        [1, -1, 0],
+        [0, -1, 1],
+        [1, -1, 1],
+      ],
+      [
+        [-1, -1, 0],
+        [0, -1, 1],
+        [-1, -1, 1],
+      ],
     ],
   },
   {
     // +Z (Front / South)
     dir: [0, 0, 1] as [number, number, number],
     normal: [0, 0, 1],
-    faceName: 'sides' as const,
-    dirTint: 0.90,
+    faceName: "sides" as const,
+    dirTint: 0.9,
     corners: [
       [0, 0, 1],
       [1, 0, 1],
@@ -107,18 +171,34 @@ export const FACES = [
       [0, 1, 1],
     ] as const,
     aoOffsets: [
-      [[-1, 0, 1], [0, -1, 1], [-1, -1, 1]],
-      [[1, 0, 1], [0, -1, 1], [1, -1, 1]],
-      [[1, 0, 1], [0, 1, 1], [1, 1, 1]],
-      [[-1, 0, 1], [0, 1, 1], [-1, 1, 1]],
+      [
+        [-1, 0, 1],
+        [0, -1, 1],
+        [-1, -1, 1],
+      ],
+      [
+        [1, 0, 1],
+        [0, -1, 1],
+        [1, -1, 1],
+      ],
+      [
+        [1, 0, 1],
+        [0, 1, 1],
+        [1, 1, 1],
+      ],
+      [
+        [-1, 0, 1],
+        [0, 1, 1],
+        [-1, 1, 1],
+      ],
     ],
   },
   {
     // -Z (Back / North)
     dir: [0, 0, -1] as [number, number, number],
     normal: [0, 0, -1],
-    faceName: 'sides' as const,
-    dirTint: 0.90,
+    faceName: "sides" as const,
+    dirTint: 0.9,
     corners: [
       [1, 0, 0],
       [0, 0, 0],
@@ -126,10 +206,26 @@ export const FACES = [
       [1, 1, 0],
     ] as const,
     aoOffsets: [
-      [[1, 0, -1], [0, -1, -1], [1, -1, -1]],
-      [[-1, 0, -1], [0, -1, -1], [-1, -1, -1]],
-      [[-1, 0, -1], [0, 1, -1], [-1, 1, -1]],
-      [[1, 0, -1], [0, 1, -1], [1, 1, -1]],
+      [
+        [1, 0, -1],
+        [0, -1, -1],
+        [1, -1, -1],
+      ],
+      [
+        [-1, 0, -1],
+        [0, -1, -1],
+        [-1, -1, -1],
+      ],
+      [
+        [-1, 0, -1],
+        [0, 1, -1],
+        [-1, 1, -1],
+      ],
+      [
+        [1, 0, -1],
+        [0, 1, -1],
+        [1, 1, -1],
+      ],
     ],
   },
 ];
@@ -164,7 +260,11 @@ export function generateChunkGeometry(
   chunkZ: number,
   getBlockGlobal?: GetBlockGlobalFn,
   getLightGlobal?: GetLightGlobalFn,
-  options: { enableAO?: boolean; naiveNoCull?: boolean; skyIntensity?: number } = {}
+  options: {
+    enableAO?: boolean;
+    naiveNoCull?: boolean;
+    skyIntensity?: number;
+  } = {},
 ): {
   geometry: THREE.BufferGeometry;
   renderedFaceCount: number;
@@ -199,7 +299,7 @@ export function generateChunkGeometry(
 
   // Local/Global Light Query
   const getLightAt = (x: number, y: number, z: number): number => {
-    if (y >= CHUNK_SIZE_Y) return (15 << 4); // Full sunlight above ceiling
+    if (y >= CHUNK_SIZE_Y) return 15 << 4; // Full sunlight above ceiling
     if (y < 0) return 0;
     if (x >= 0 && x < CHUNK_SIZE_X && z >= 0 && z < CHUNK_SIZE_Z) {
       return lightMap[getBlockIndex(x, y, z)];
@@ -207,7 +307,7 @@ export function generateChunkGeometry(
     if (getLightGlobal) {
       return getLightGlobal(worldOffsetX + x, y, worldOffsetZ + z);
     }
-    return (15 << 4); // Default to sunlight outside
+    return 15 << 4; // Default to sunlight outside
   };
 
   for (let y = 0; y < CHUNK_SIZE_Y; y++) {
@@ -231,7 +331,8 @@ export function generateChunkGeometry(
 
           // Check neighbor block
           const neighborBlockId = getBlockAt(nx, ny, nz);
-          const neighborDef = BLOCK_DEFS[neighborBlockId] || BLOCK_DEFS[BLOCK.AIR];
+          const neighborDef =
+            BLOCK_DEFS[neighborBlockId] || BLOCK_DEFS[BLOCK.AIR];
 
           // Face Culling Logic:
           // Draw face if naiveNoCull is true OR neighbor is air OR neighbor is transparent (and not same block)
@@ -272,7 +373,11 @@ export function generateChunkGeometry(
             const [o1, o2, oCorner] = face.aoOffsets[i];
             const blockSide1 = getBlockAt(x + o1[0], y + o1[1], z + o1[2]);
             const blockSide2 = getBlockAt(x + o2[0], y + o2[1], z + o2[2]);
-            const blockCorner = getBlockAt(x + oCorner[0], y + oCorner[1], z + oCorner[2]);
+            const blockCorner = getBlockAt(
+              x + oCorner[0],
+              y + oCorner[1],
+              z + oCorner[2],
+            );
 
             const side1Opaque = !isLightTransparent(blockSide1);
             const side2Opaque = !isLightTransparent(blockSide2);
@@ -280,7 +385,11 @@ export function generateChunkGeometry(
 
             if (enableAO) {
               // 4 Levels of shading: 0%, 20%, 40%, 60%
-              const aoResult = calculateVertexAO(side1Opaque, side2Opaque, cornerOpaque);
+              const aoResult = calculateVertexAO(
+                side1Opaque,
+                side2Opaque,
+                cornerOpaque,
+              );
               aoFactor = aoResult.factor;
               aoLevel = aoResult.level;
             }
@@ -314,7 +423,7 @@ export function generateChunkGeometry(
               vertexBlock,
               aoFactor,
               face.dirTint,
-              skyIntensity
+              skyIntensity,
             );
 
             faceColors.push([cr, cg, cb]);
@@ -333,7 +442,10 @@ export function generateChunkGeometry(
           // AO Diagonal Flip: If corner 0 & 2 have stronger occlusion than 1 & 3,
           // flip the split diagonal to avoid cross-quad interpolation artifacts.
           const vOffset = faceIndex * 4;
-          if (enableAO && cornerAOs[0] + cornerAOs[2] > cornerAOs[1] + cornerAOs[3]) {
+          if (
+            enableAO &&
+            cornerAOs[0] + cornerAOs[2] > cornerAOs[1] + cornerAOs[3]
+          ) {
             indices.push(vOffset + 1, vOffset + 2, vOffset + 3);
             indices.push(vOffset + 3, vOffset, vOffset + 1);
           } else {
@@ -348,10 +460,13 @@ export function generateChunkGeometry(
   }
 
   const geometry = new THREE.BufferGeometry();
-  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-  geometry.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
-  geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
-  geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+  geometry.setAttribute(
+    "position",
+    new THREE.Float32BufferAttribute(positions, 3),
+  );
+  geometry.setAttribute("normal", new THREE.Float32BufferAttribute(normals, 3));
+  geometry.setAttribute("uv", new THREE.Float32BufferAttribute(uvs, 2));
+  geometry.setAttribute("color", new THREE.Float32BufferAttribute(colors, 3));
   geometry.setIndex(indices);
 
   return {
