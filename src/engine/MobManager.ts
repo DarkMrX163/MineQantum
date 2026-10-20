@@ -277,11 +277,11 @@ export class MobManager {
           mob.targetRotationY = Math.atan2(dx, dz);
           mob.state = "idle";
 
-          // Give food gift if cooldown ready
+          // Give food gift if cooldown ready (ONLY Steve, count: 1)
           if (distToPlayer < 2.8 && mob.attackCooldown <= 0) {
-            mob.attackCooldown = 15.0; // 15s gift cooldown
+            mob.attackCooldown = 30.0; // 30s gift cooldown
             if (this.onFriendlyPetGiveFood) {
-              const foods = ["cooked_beef", "bread", "apple"];
+              const foods = ["apple", "bread", "cooked_beef"];
               const randomFood =
                 foods[Math.floor(Math.random() * foods.length)];
               this.onFriendlyPetGiveFood(mob.position.clone(), randomFood);
@@ -294,6 +294,28 @@ export class MobManager {
           mob.walkSpeed = 0.6;
         } else {
           // Wander peacefully
+          if (mob.stateTimer <= 0) {
+            mob.state = mob.state === "idle" ? "wander" : "idle";
+            mob.targetRotationY = Math.random() * Math.PI * 2;
+            mob.walkSpeed = mob.state === "wander" ? 0.4 : 0;
+            mob.stateTimer = 3 + Math.random() * 3;
+          }
+        }
+      } else if (
+        mob.type === "alex" ||
+        mob.type === "miner" ||
+        mob.type === "knight" ||
+        mob.type === "engineer"
+      ) {
+        if (distToPlayer < 3.0) {
+          mob.walkSpeed = 0;
+          mob.targetRotationY = Math.atan2(dx, dz);
+          mob.state = "idle";
+        } else if (distToPlayer < 16) {
+          mob.state = "chase";
+          mob.targetRotationY = Math.atan2(dx, dz);
+          mob.walkSpeed = 0.6;
+        } else {
           if (mob.stateTimer <= 0) {
             mob.state = mob.state === "idle" ? "wander" : "idle";
             mob.targetRotationY = Math.random() * Math.PI * 2;

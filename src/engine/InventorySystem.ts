@@ -156,6 +156,16 @@ export const ITEM_REGISTRY: Record<string, ItemDefinition> = {
     color: '#831843',
     description: 'Hearty cooked steak. Restores 8 hunger units.',
   },
+  campfire: {
+    id: 'campfire',
+    name: 'Campfire',
+    type: 'block',
+    blockId: BLOCK.CAMPFIRE,
+    miningSpeedMultiplier: 1.0,
+    maxStack: 64,
+    color: '#ea580c',
+    description: 'Cozy campfire providing light, warmth, and cooking.',
+  },
 
   // Materials
   stick: {
@@ -606,6 +616,19 @@ export const CRAFTING_RECIPES: CraftingRecipe[] = [
       ['planks', 'planks'],
     ],
     result: { id: 'crafting_table', count: 1, maxStack: 64 },
+  },
+  // Campfire (3x3): 3 Wood Logs + 1 Coal
+  {
+    id: 'campfire',
+    name: 'Campfire',
+    width: 3,
+    height: 3,
+    pattern: [
+      ['wood', 'wood', 'wood'],
+      [null, 'coal', null],
+      [null, null, null],
+    ],
+    result: { id: 'campfire', count: 1, maxStack: 64 },
   },
   // Diamond Pickaxe (3x3): 3 Diamonds + 2 Sticks
   {

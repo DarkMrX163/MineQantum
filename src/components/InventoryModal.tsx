@@ -9,7 +9,7 @@ import {
 } from '../engine/InventorySystem';
 import { ItemIcon } from './ItemIcon';
 import { sound } from '../engine/AudioEngine';
-import { X, Sparkles, BookOpen, Hammer, ChevronRight } from 'lucide-react';
+import { X, Sparkles, BookOpen, Hammer, ChevronRight, Trash2 } from 'lucide-react';
 
 interface InventoryModalProps {
   isOpen: boolean;
@@ -409,7 +409,28 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
 
         {/* 27 Main Inventory Slots */}
         <div className="flex flex-col gap-1.5">
-          <span className="text-xs font-semibold text-slate-400">Inventory Storage (27 slots)</span>
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-slate-400">Inventory Storage (27 slots)</span>
+            <div
+              onMouseUp={() => {
+                if (heldItem) {
+                  setHeldItem(null);
+                  sound.playBlockBreak();
+                }
+              }}
+              className={`flex items-center gap-1.5 px-3 py-1 rounded-lg border transition cursor-pointer ${
+                heldItem
+                  ? 'bg-red-500/30 border-red-500 text-red-200 animate-pulse scale-105 shadow-[0_0_15px_rgba(239,68,68,0.5)]'
+                  : 'bg-slate-900 border-slate-800 text-slate-400 hover:bg-slate-800 hover:text-red-400'
+              }`}
+              title="Перетащите сюда предмет, чтобы уничтожить его"
+            >
+              <Trash2 className="w-4 h-4" />
+              <span className="text-[11px] font-medium">
+                {heldItem ? 'Отпустите чтобы удалить' : 'Уничтожить'}
+              </span>
+            </div>
+          </div>
           <div className="grid grid-cols-9 gap-1.5 p-2 bg-slate-950/50 rounded-xl border border-slate-800">
             {inventory.map((item, idx) => (
               <div

@@ -28,6 +28,7 @@ export const BLOCK = {
   GOLD_ORE: 16,
   DIAMOND_ORE: 17,
   REDSTONE_ORE: 18,
+  CAMPFIRE: 19,
 } as const;
 
 export type BlockId = (typeof BLOCK)[keyof typeof BLOCK];
@@ -191,6 +192,15 @@ export const BLOCK_DEFS: Record<number, BlockInfo> = {
     transparent: false,
     solid: true,
     tiles: { top: 20, bottom: 20, sides: 20 },
+  },
+  [BLOCK.CAMPFIRE]: {
+    id: 19,
+    name: "Campfire",
+    transparent: true,
+    solid: false,
+    lightEmission: 14,
+    lightDamping: 0,
+    tiles: { top: 12, bottom: 2, sides: 6 },
   },
 };
 

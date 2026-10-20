@@ -4,7 +4,7 @@ import { ChunkManager } from "../engine/ChunkManager";
 import { FirstPersonController } from "../engine/FirstPersonController";
 import { createTextureAtlas } from "../engine/TextureAtlas";
 import { createWaterShaderMaterial } from "../engine/WaterShader";
-import { BlockId, ChunkStats } from "../engine/types";
+import { BLOCK, BlockId, ChunkStats } from "../engine/types";
 import { NetworkManager } from "../engine/NetworkManager";
 import { MobManager } from "../engine/MobManager";
 import { sound } from "../engine/AudioEngine";
@@ -26,6 +26,7 @@ import {
   EventType,
 } from "../engine/WorldEventManager";
 import { BlockParticleManager } from "../engine/BlockParticleManager";
+import { FirstPersonHands } from "../engine/FirstPersonHands";
 
 interface VoxelCanvasProps {
   selectedBlock: BlockId;
@@ -226,6 +227,9 @@ export const VoxelCanvas: React.FC<VoxelCanvasProps> = ({
     controller.position.set(8, 28, 8);
     controllerRef.current = controller;
 
+    // 7.5 First-Person Hands & Held Item Renderer
+    const hands = new FirstPersonHands(camera);
+
     // Initialize NetworkManager for WebSockets, position throttling & remote player lerping
     const netManager = new NetworkManager(scene, chunkManager);
     controller.netManager = netManager;
@@ -305,9 +309,20 @@ export const VoxelCanvas: React.FC<VoxelCanvasProps> = ({
     controller.onToolUsed = () => {
       onToolUsed?.();
     };
-    controller.onBlockPlaced = () => {
+    let handSwingTimer = 0;
+
+    controller.onBlockPlaced = (blockId, pos) => {
       HapticManager.tap();
       onBlockPlaced?.();
+      handSwingTimer = 0.25;
+      if (blockId === BLOCK.TORCH || blockId === BLOCK.CAMPFIRE) {
+        const lightColor = blockId === BLOCK.CAMPFIRE ? 0xff5500 : 0xffaa44;
+        const lightIntensity = blockId === BLOCK.CAMPFIRE ? 3.0 : 2.2;
+        const lightDistance = blockId === BLOCK.CAMPFIRE ? 12 : 10;
+        const torchLight = new THREE.PointLight(lightColor, lightIntensity, lightDistance);
+        torchLight.position.copy(pos).add(new THREE.Vector3(0.5, blockId === BLOCK.CAMPFIRE ? 0.2 : 0.5, 0.5));
+        scene.add(torchLight);
+      }
     };
     controller.onBreakingProgressChange = (prog) => {
       setBreakingProgress(prog);
@@ -340,6 +355,7 @@ export const VoxelCanvas: React.FC<VoxelCanvasProps> = ({
       const heldDef = heldItem ? ITEM_REGISTRY[heldItem.id] : null;
       const dmg = heldDef?.attackDamage || 1;
       const res = mobManager.hitMobAtRay(camera, dmg);
+      handSwingTimer = 0.25;
       if (res.hit) {
         sound.playHurt();
         onToolUsed?.();
@@ -367,20 +383,10 @@ export const VoxelCanvas: React.FC<VoxelCanvasProps> = ({
       if (onActiveEventUpdate) onActiveEventUpdate(null);
     };
 
-    // Mob loot drop on death
+    // Mob loot drop on death (No free food drops - player gathers food themselves)
     mobManager.onMobKilled = (type, pos) => {
       eventManager.notifyMobKilled();
-      if (
-        type === "zombie" ||
-        type === "skeleton" ||
-        type === "cow" ||
-        type === "pig"
-      ) {
-        dropManager.spawnDrop(
-          { id: "cooked_beef", count: 1, maxStack: 64 },
-          pos,
-        );
-      } else if (type === "sheep") {
+      if (type === "sheep") {
         dropManager.spawnDrop(
           { id: "cobblestone", count: 2, maxStack: 64 },
           pos,
@@ -392,7 +398,7 @@ export const VoxelCanvas: React.FC<VoxelCanvasProps> = ({
       }
     };
 
-    // Friendly pet food gift
+    // Friendly pet food gift (ONLY from Steve, count: 1)
     mobManager.onFriendlyPetGiveFood = (pos, foodType) => {
       sound.playItemPickup();
       dropManager.spawnDrop({ id: foodType, count: 1, maxStack: 64 }, pos);
@@ -647,6 +653,23 @@ export const VoxelCanvas: React.FC<VoxelCanvasProps> = ({
       // Update controller physics
       controller.update(delta);
 
+      // Update First-Person Hands & Held Item
+      const heldDef = heldItem ? ITEM_REGISTRY[heldItem.id] : null;
+      const effectiveBlockToPlace: BlockId =
+        heldDef?.type === "block" && heldDef.blockId !== undefined
+          ? heldDef.blockId
+          : heldItem === null
+            ? selectedBlock
+            : BLOCK.AIR;
+
+      hands.updateHeldItem(heldItem, effectiveBlockToPlace);
+      const isMoving =
+        controller.velocity.x !== 0 || controller.velocity.z !== 0;
+      const isMining = controller.isLMBDown;
+      handSwingTimer = Math.max(0, handSwingTimer - delta);
+      const isSwinging = handSwingTimer > 0;
+      hands.animate(elapsedTime, isMoving, isMining, isSwinging);
+
       // Interpolate remote players smooth movement
       netManager.update(delta);
 
@@ -740,6 +763,7 @@ export const VoxelCanvas: React.FC<VoxelCanvasProps> = ({
       renderer.domElement.removeEventListener("mousedown", handleMouseDown);
       renderer.domElement.removeEventListener("contextmenu", handleContextMenu);
       window.removeEventListener("contextmenu", handleContextMenu);
+      hands.dispose(camera);
       if (mountRef.current) {
         mountRef.current.innerHTML = "";
       }

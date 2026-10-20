@@ -74,26 +74,20 @@ export default function App() {
 
   // --- Inventory & Crafting State ---
   const [hotbar, setHotbar] = useState<(SlotItem | null)[]>([
-    { id: 'diamond_sword', count: 1, durability: 1561, maxDurability: 1561, maxStack: 1 },
-    { id: 'diamond_pickaxe', count: 1, durability: 1561, maxDurability: 1561, maxStack: 1 },
-    { id: 'cooked_beef', count: 16, maxStack: 64 },
-    { id: 'bread', count: 12, maxStack: 64 },
-    { id: 'dirt', count: 32, maxStack: 64 },
-    { id: 'stone', count: 16, maxStack: 64 },
-    { id: 'wood', count: 8, maxStack: 64 },
-    { id: 'torch', count: 16, maxStack: 64 },
-    { id: 'crafting_table', count: 1, maxStack: 64 },
+    { id: 'wooden_pickaxe', count: 1, durability: 59, maxDurability: 59, maxStack: 1 },
+    { id: 'wooden_axe', count: 1, durability: 59, maxDurability: 59, maxStack: 1 },
+    { id: 'torch', count: 4, maxStack: 64 },
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
   ]);
 
-  const [inventory, setInventory] = useState<(SlotItem | null)[]>([
-    { id: 'wooden_pickaxe', count: 1, durability: 59, maxDurability: 59, maxStack: 1 },
-    { id: 'apple', count: 12, maxStack: 64 },
-    { id: 'sand', count: 20, maxStack: 64 },
-    { id: 'brick', count: 16, maxStack: 64 },
-    { id: 'coal', count: 12, maxStack: 64 },
-    { id: 'glass', count: 8, maxStack: 64 },
-    ...Array(21).fill(null),
-  ]);
+  const [inventory, setInventory] = useState<(SlotItem | null)[]>(
+    Array(27).fill(null)
+  );
 
   const [selectedHotbarIndex, setSelectedHotbarIndex] = useState(0);
   const [isInventoryOpen, setIsInventoryOpen] = useState(false);
@@ -318,14 +312,14 @@ export default function App() {
     setHunger(20);
     setDeathScatterTrigger(null);
 
-    // Provide good starter equipment on respawn
+    // Provide basic starter tools on respawn, no free food
     setHotbar([
-      { id: 'diamond_sword', count: 1, durability: 1561, maxDurability: 1561, maxStack: 1 },
       { id: 'wooden_pickaxe', count: 1, durability: 59, maxDurability: 59, maxStack: 1 },
-      { id: 'cooked_beef', count: 8, maxStack: 64 },
-      { id: 'bread', count: 8, maxStack: 64 },
-      ...Array(5).fill(null),
+      { id: 'wooden_axe', count: 1, durability: 59, maxDurability: 59, maxStack: 1 },
+      { id: 'torch', count: 4, maxStack: 64 },
+      ...Array(6).fill(null),
     ]);
+    setInventory(Array(27).fill(null));
 
     setRespawnTrigger((prev) => prev + 1);
     setPointerLockRequested(true);
