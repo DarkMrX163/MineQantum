@@ -1,0 +1,971 @@
+import * as THREE from 'three';
+import { BLOCK, BlockId } from './types';
+import { ChunkManager } from './ChunkManager';
+import { sound } from './AudioEngine';
+
+/**
+ * Slot Data Structure conforming to specification:
+ * { id: 'diamond_pickaxe', count: 1, durability: 1561, maxStack: 64 }
+ */
+export interface SlotItem {
+  id: string;
+  count: number;
+  durability?: number;
+  maxDurability?: number;
+  maxStack: number;
+}
+
+export interface ItemDefinition {
+  id: string;
+  name: string;
+  type: 'block' | 'tool' | 'weapon' | 'material' | 'food';
+  blockId?: BlockId;
+  toolType?: 'pickaxe' | 'axe' | 'shovel' | 'sword' | 'none';
+  toolTier?: 'none' | 'wood' | 'stone' | 'iron' | 'diamond';
+  miningSpeedMultiplier: number;
+  attackDamage?: number;
+  foodValue?: number;
+  maxStack: number;
+  maxDurability?: number;
+  color: string;
+  description: string;
+}
+
+export const ITEM_REGISTRY: Record<string, ItemDefinition> = {
+  // Tools & Weapons
+  diamond_pickaxe: {
+    id: 'diamond_pickaxe',
+    name: 'Diamond Pickaxe',
+    type: 'tool',
+    toolType: 'pickaxe',
+    toolTier: 'diamond',
+    miningSpeedMultiplier: 12.0,
+    attackDamage: 5,
+    maxStack: 1,
+    maxDurability: 1561,
+    color: '#38bdf8',
+    description: 'Instantly shatters stone and ores. Extreme durability.',
+  },
+  stone_pickaxe: {
+    id: 'stone_pickaxe',
+    name: 'Stone Pickaxe',
+    type: 'tool',
+    toolType: 'pickaxe',
+    toolTier: 'stone',
+    miningSpeedMultiplier: 4.0,
+    attackDamage: 3,
+    maxStack: 1,
+    maxDurability: 131,
+    color: '#94a3b8',
+    description: 'Sturdy stone pickaxe for mining stone and minerals.',
+  },
+  wooden_pickaxe: {
+    id: 'wooden_pickaxe',
+    name: 'Wooden Pickaxe',
+    type: 'tool',
+    toolType: 'pickaxe',
+    toolTier: 'wood',
+    miningSpeedMultiplier: 2.0,
+    attackDamage: 2,
+    maxStack: 1,
+    maxDurability: 59,
+    color: '#b45309',
+    description: 'Basic wooden pickaxe. Allows collecting stone.',
+  },
+  diamond_axe: {
+    id: 'diamond_axe',
+    name: 'Diamond Axe',
+    type: 'tool',
+    toolType: 'axe',
+    toolTier: 'diamond',
+    miningSpeedMultiplier: 12.0,
+    attackDamage: 9,
+    maxStack: 1,
+    maxDurability: 1561,
+    color: '#38bdf8',
+    description: 'Chops trees and wooden blocks in an instant.',
+  },
+  wooden_axe: {
+    id: 'wooden_axe',
+    name: 'Wooden Axe',
+    type: 'tool',
+    toolType: 'axe',
+    toolTier: 'wood',
+    miningSpeedMultiplier: 2.5,
+    attackDamage: 3,
+    maxStack: 1,
+    maxDurability: 59,
+    color: '#b45309',
+    description: 'Helpful for cutting wood logs.',
+  },
+  diamond_sword: {
+    id: 'diamond_sword',
+    name: 'Diamond Sword',
+    type: 'weapon',
+    toolType: 'sword',
+    toolTier: 'diamond',
+    miningSpeedMultiplier: 1.5,
+    attackDamage: 7,
+    maxStack: 1,
+    maxDurability: 1561,
+    color: '#38bdf8',
+    description: '+7 Attack Damage. Defends against hostile mobs.',
+  },
+  diamond_shovel: {
+    id: 'diamond_shovel',
+    name: 'Diamond Shovel',
+    type: 'tool',
+    toolType: 'shovel',
+    toolTier: 'diamond',
+    miningSpeedMultiplier: 12.0,
+    attackDamage: 4,
+    maxStack: 1,
+    maxDurability: 1561,
+    color: '#38bdf8',
+    description: 'Instantly digs dirt, grass, and sand.',
+  },
+
+  // Food Items
+  apple: {
+    id: 'apple',
+    name: 'Red Apple',
+    type: 'food',
+    miningSpeedMultiplier: 1.0,
+    foodValue: 4,
+    maxStack: 64,
+    color: '#ef4444',
+    description: 'Crisp sweet apple. Restores 4 hunger units.',
+  },
+  bread: {
+    id: 'bread',
+    name: 'Bread',
+    type: 'food',
+    miningSpeedMultiplier: 1.0,
+    foodValue: 5,
+    maxStack: 64,
+    color: '#f59e0b',
+    description: 'Baked wheat bread loaf. Restores 5 hunger units.',
+  },
+  cooked_beef: {
+    id: 'cooked_beef',
+    name: 'Steak',
+    type: 'food',
+    miningSpeedMultiplier: 1.0,
+    foodValue: 8,
+    maxStack: 64,
+    color: '#831843',
+    description: 'Hearty cooked steak. Restores 8 hunger units.',
+  },
+
+  // Materials
+  stick: {
+    id: 'stick',
+    name: 'Stick',
+    type: 'material',
+    miningSpeedMultiplier: 1.0,
+    maxStack: 64,
+    color: '#92400e',
+    description: 'Crafting component for tool handles and torches.',
+  },
+  diamond: {
+    id: 'diamond',
+    name: 'Diamond',
+    type: 'material',
+    miningSpeedMultiplier: 1.0,
+    maxStack: 64,
+    color: '#38bdf8',
+    description: 'Precious gemstone used to forge high-tier gear.',
+  },
+  coal: {
+    id: 'coal',
+    name: 'Coal',
+    type: 'material',
+    miningSpeedMultiplier: 1.0,
+    maxStack: 64,
+    color: '#334155',
+    description: 'Fuel for torches and smelting.',
+  },
+
+  // Blocks
+  cobblestone: {
+    id: 'cobblestone',
+    name: 'Cobblestone',
+    type: 'block',
+    blockId: BLOCK.STONE,
+    miningSpeedMultiplier: 1.0,
+    maxStack: 64,
+    color: '#64748b',
+    description: 'Rough stone dropped when mining stone with a pickaxe.',
+  },
+  stone: {
+    id: 'stone',
+    name: 'Stone',
+    type: 'block',
+    blockId: BLOCK.STONE,
+    miningSpeedMultiplier: 1.0,
+    maxStack: 64,
+    color: '#78716c',
+    description: 'Natural stone from caves and mountains.',
+  },
+  dirt: {
+    id: 'dirt',
+    name: 'Dirt',
+    type: 'block',
+    blockId: BLOCK.DIRT,
+    miningSpeedMultiplier: 1.0,
+    maxStack: 64,
+    color: '#78350f',
+    description: 'Common soil block.',
+  },
+  grass_block: {
+    id: 'grass_block',
+    name: 'Grass Block',
+    type: 'block',
+    blockId: BLOCK.GRASS,
+    miningSpeedMultiplier: 1.0,
+    maxStack: 64,
+    color: '#22c55e',
+    description: 'Surface terrain block topped with luscious grass.',
+  },
+  wood: {
+    id: 'wood',
+    name: 'Wood Log',
+    type: 'block',
+    blockId: BLOCK.WOOD,
+    miningSpeedMultiplier: 1.0,
+    maxStack: 64,
+    color: '#854d0e',
+    description: 'Oak tree trunk log. Crafts into 4 wooden planks.',
+  },
+  planks: {
+    id: 'planks',
+    name: 'Wooden Planks',
+    type: 'block',
+    blockId: BLOCK.PLANKS,
+    miningSpeedMultiplier: 1.0,
+    maxStack: 64,
+    color: '#d97706',
+    description: 'Versatile construction and crafting material.',
+  },
+  leaves: {
+    id: 'leaves',
+    name: 'Leaves',
+    type: 'block',
+    blockId: BLOCK.LEAVES,
+    miningSpeedMultiplier: 1.0,
+    maxStack: 64,
+    color: '#15803d',
+    description: 'Tree foliage.',
+  },
+  sand: {
+    id: 'sand',
+    name: 'Sand',
+    type: 'block',
+    blockId: BLOCK.SAND,
+    miningSpeedMultiplier: 1.0,
+    maxStack: 64,
+    color: '#facc15',
+    description: 'Granular shoreline and desert block.',
+  },
+  brick: {
+    id: 'brick',
+    name: 'Red Brick',
+    type: 'block',
+    blockId: BLOCK.BRICK,
+    miningSpeedMultiplier: 1.0,
+    maxStack: 64,
+    color: '#b91c1c',
+    description: 'Fired clay brick block.',
+  },
+  glass: {
+    id: 'glass',
+    name: 'Glass',
+    type: 'block',
+    blockId: BLOCK.GLASS,
+    miningSpeedMultiplier: 1.0,
+    maxStack: 64,
+    color: '#a5f3fc',
+    description: 'Transparent silica block.',
+  },
+  torch: {
+    id: 'torch',
+    name: 'Torch',
+    type: 'block',
+    blockId: BLOCK.TORCH,
+    miningSpeedMultiplier: 1.0,
+    maxStack: 64,
+    color: '#f59e0b',
+    description: 'Emits warm block light (level 14).',
+  },
+  crafting_table: {
+    id: 'crafting_table',
+    name: 'Crafting Table',
+    type: 'block',
+    blockId: BLOCK.PLANKS,
+    miningSpeedMultiplier: 1.0,
+    maxStack: 64,
+    color: '#b45309',
+    description: 'Unlocks advanced 3×3 crafting recipes.',
+  },
+  furnace: {
+    id: 'furnace',
+    name: 'Furnace',
+    type: 'block',
+    blockId: BLOCK.STONE,
+    miningSpeedMultiplier: 1.0,
+    maxStack: 64,
+    color: '#475569',
+    description: 'Smelting workstation.',
+  },
+};
+
+/**
+ * Block Hardness & Tool Compatibility Rules
+ */
+export interface BlockBreakRule {
+  blockId: number;
+  baseHardness: number; // in seconds
+  preferredTool?: 'pickaxe' | 'axe' | 'shovel' | 'sword';
+  requiresTool: boolean; // if true and wrong tool, drops nothing!
+  minToolTier?: 'wood' | 'stone' | 'iron' | 'diamond';
+  dropItemId: string | null;
+  dropCount: number;
+}
+
+export const BLOCK_BREAK_RULES: Record<number, BlockBreakRule> = {
+  [BLOCK.STONE]: {
+    blockId: BLOCK.STONE,
+    baseHardness: 1.5,
+    preferredTool: 'pickaxe',
+    requiresTool: true, // Hand breaks stone slowly and drops NOTHING!
+    minToolTier: 'wood',
+    dropItemId: 'cobblestone',
+    dropCount: 1,
+  },
+  [BLOCK.DIRT]: {
+    blockId: BLOCK.DIRT,
+    baseHardness: 0.5,
+    preferredTool: 'shovel',
+    requiresTool: false,
+    dropItemId: 'dirt',
+    dropCount: 1,
+  },
+  [BLOCK.GRASS]: {
+    blockId: BLOCK.GRASS,
+    baseHardness: 0.6,
+    preferredTool: 'shovel',
+    requiresTool: false,
+    dropItemId: 'dirt',
+    dropCount: 1,
+  },
+  [BLOCK.WOOD]: {
+    blockId: BLOCK.WOOD,
+    baseHardness: 2.0,
+    preferredTool: 'axe',
+    requiresTool: false,
+    dropItemId: 'wood',
+    dropCount: 1,
+  },
+  [BLOCK.PLANKS]: {
+    blockId: BLOCK.PLANKS,
+    baseHardness: 1.5,
+    preferredTool: 'axe',
+    requiresTool: false,
+    dropItemId: 'planks',
+    dropCount: 1,
+  },
+  [BLOCK.LEAVES]: {
+    blockId: BLOCK.LEAVES,
+    baseHardness: 0.2,
+    requiresTool: false,
+    dropItemId: 'stick',
+    dropCount: 1,
+  },
+  [BLOCK.SAND]: {
+    blockId: BLOCK.SAND,
+    baseHardness: 0.5,
+    preferredTool: 'shovel',
+    requiresTool: false,
+    dropItemId: 'sand',
+    dropCount: 1,
+  },
+  [BLOCK.BRICK]: {
+    blockId: BLOCK.BRICK,
+    baseHardness: 2.0,
+    preferredTool: 'pickaxe',
+    requiresTool: true,
+    minToolTier: 'wood',
+    dropItemId: 'brick',
+    dropCount: 1,
+  },
+  [BLOCK.GLASS]: {
+    blockId: BLOCK.GLASS,
+    baseHardness: 0.3,
+    requiresTool: false,
+    dropItemId: null, // Glass shatters without drop
+    dropCount: 0,
+  },
+  [BLOCK.TORCH]: {
+    blockId: BLOCK.TORCH,
+    baseHardness: 0.05,
+    requiresTool: false,
+    dropItemId: 'torch',
+    dropCount: 1,
+  },
+};
+
+/**
+ * Calculates breaking duration (seconds) and whether a valid drop is yielded.
+ */
+export function calculateBlockBreaking(
+  blockId: number,
+  heldItem: SlotItem | null
+): { breakDuration: number; canHarvest: boolean; dropItemId: string | null; dropCount: number } {
+  const rule = BLOCK_BREAK_RULES[blockId];
+  if (!rule) {
+    // Unbreakable or non-interactive block (e.g. Bedrock, Water, Lava)
+    return { breakDuration: 999999, canHarvest: false, dropItemId: null, dropCount: 0 };
+  }
+
+  const itemDef = heldItem ? ITEM_REGISTRY[heldItem.id] : null;
+  const isPreferred = rule.preferredTool && itemDef?.toolType === rule.preferredTool;
+
+  // Tool speed multiplier
+  let speedMultiplier = 1.0;
+  if (isPreferred && itemDef) {
+    speedMultiplier = itemDef.miningSpeedMultiplier;
+  }
+
+  // Tier check
+  const tierRanks: Record<string, number> = { none: 0, wood: 1, stone: 2, iron: 3, diamond: 4 };
+  const requiredRank = rule.minToolTier ? tierRanks[rule.minToolTier] : 0;
+  const currentRank = itemDef?.toolTier ? tierRanks[itemDef.toolTier] : 0;
+
+  const canHarvest: boolean = !rule.requiresTool || Boolean(isPreferred && currentRank >= requiredRank);
+
+  // In Minecraft:
+  // If can harvest with tool: time = (baseHardness * 1.5) / speed
+  // If cannot harvest (e.g. hand on stone): time = (baseHardness * 5.0) / 1.0
+  let breakDuration = 0;
+  if (rule.baseHardness <= 0.05) {
+    breakDuration = 0.05; // Instantaneous torch break
+  } else if (canHarvest) {
+    breakDuration = (rule.baseHardness * 1.5) / speedMultiplier;
+  } else {
+    breakDuration = rule.baseHardness * 3.33; // Hand breaks stone slowly (~5.0 seconds)
+  }
+
+  // Diamond Pickaxe breaks stone almost instantaneously (~0.18s)
+  if (itemDef?.id === 'diamond_pickaxe' && blockId === BLOCK.STONE) {
+    breakDuration = 0.12;
+  }
+
+  return {
+    breakDuration,
+    canHarvest,
+    dropItemId: canHarvest ? rule.dropItemId : null,
+    dropCount: canHarvest ? rule.dropCount : 0,
+  };
+}
+
+/**
+ * 2D Crafting Recipe Pattern
+ */
+export interface CraftingRecipe {
+  id: string;
+  name: string;
+  width: number;
+  height: number;
+  pattern: (string | null)[][]; // 2D array of item IDs
+  result: SlotItem;
+}
+
+export const CRAFTING_RECIPES: CraftingRecipe[] = [
+  // 1 Wood Log -> 4 Wooden Planks (1x1)
+  {
+    id: 'wood_to_planks',
+    name: 'Wooden Planks',
+    width: 1,
+    height: 1,
+    pattern: [['wood']],
+    result: { id: 'planks', count: 4, maxStack: 64 },
+  },
+  // 2 Planks vertically -> 4 Sticks (1x2)
+  {
+    id: 'planks_to_sticks',
+    name: 'Sticks',
+    width: 1,
+    height: 2,
+    pattern: [['planks'], ['planks']],
+    result: { id: 'stick', count: 4, maxStack: 64 },
+  },
+  // 4 Planks (2x2) -> 1 Crafting Table
+  {
+    id: 'crafting_table',
+    name: 'Crafting Table',
+    width: 2,
+    height: 2,
+    pattern: [
+      ['planks', 'planks'],
+      ['planks', 'planks'],
+    ],
+    result: { id: 'crafting_table', count: 1, maxStack: 64 },
+  },
+  // Diamond Pickaxe (3x3): 3 Diamonds + 2 Sticks
+  {
+    id: 'diamond_pickaxe',
+    name: 'Diamond Pickaxe',
+    width: 3,
+    height: 3,
+    pattern: [
+      ['diamond', 'diamond', 'diamond'],
+      [null, 'stick', null],
+      [null, 'stick', null],
+    ],
+    result: {
+      id: 'diamond_pickaxe',
+      count: 1,
+      durability: 1561,
+      maxDurability: 1561,
+      maxStack: 1,
+    },
+  },
+  // Stone Pickaxe (3x3): 3 Cobblestone + 2 Sticks
+  {
+    id: 'stone_pickaxe',
+    name: 'Stone Pickaxe',
+    width: 3,
+    height: 3,
+    pattern: [
+      ['cobblestone', 'cobblestone', 'cobblestone'],
+      [null, 'stick', null],
+      [null, 'stick', null],
+    ],
+    result: {
+      id: 'stone_pickaxe',
+      count: 1,
+      durability: 131,
+      maxDurability: 131,
+      maxStack: 1,
+    },
+  },
+  // Wooden Pickaxe (3x3): 3 Planks + 2 Sticks
+  {
+    id: 'wooden_pickaxe',
+    name: 'Wooden Pickaxe',
+    width: 3,
+    height: 3,
+    pattern: [
+      ['planks', 'planks', 'planks'],
+      [null, 'stick', null],
+      [null, 'stick', null],
+    ],
+    result: {
+      id: 'wooden_pickaxe',
+      count: 1,
+      durability: 59,
+      maxDurability: 59,
+      maxStack: 1,
+    },
+  },
+  // Diamond Axe (2x3)
+  {
+    id: 'diamond_axe',
+    name: 'Diamond Axe',
+    width: 2,
+    height: 3,
+    pattern: [
+      ['diamond', 'diamond'],
+      ['diamond', 'stick'],
+      [null, 'stick'],
+    ],
+    result: {
+      id: 'diamond_axe',
+      count: 1,
+      durability: 1561,
+      maxDurability: 1561,
+      maxStack: 1,
+    },
+  },
+  // Wooden Axe (2x3)
+  {
+    id: 'wooden_axe',
+    name: 'Wooden Axe',
+    width: 2,
+    height: 3,
+    pattern: [
+      ['planks', 'planks'],
+      ['planks', 'stick'],
+      [null, 'stick'],
+    ],
+    result: {
+      id: 'wooden_axe',
+      count: 1,
+      durability: 59,
+      maxDurability: 59,
+      maxStack: 1,
+    },
+  },
+  // Diamond Sword (1x3)
+  {
+    id: 'diamond_sword',
+    name: 'Diamond Sword',
+    width: 1,
+    height: 3,
+    pattern: [['diamond'], ['diamond'], ['stick']],
+    result: {
+      id: 'diamond_sword',
+      count: 1,
+      durability: 1561,
+      maxDurability: 1561,
+      maxStack: 1,
+    },
+  },
+  // Diamond Shovel (1x3)
+  {
+    id: 'diamond_shovel',
+    name: 'Diamond Shovel',
+    width: 1,
+    height: 3,
+    pattern: [['diamond'], ['stick'], ['stick']],
+    result: {
+      id: 'diamond_shovel',
+      count: 1,
+      durability: 1561,
+      maxDurability: 1561,
+      maxStack: 1,
+    },
+  },
+  // Torch (1x2): Coal or Wood + Stick -> 4 Torches
+  {
+    id: 'torch_coal',
+    name: 'Torches',
+    width: 1,
+    height: 2,
+    pattern: [['coal'], ['stick']],
+    result: { id: 'torch', count: 4, maxStack: 64 },
+  },
+  {
+    id: 'torch_wood',
+    name: 'Torches',
+    width: 1,
+    height: 2,
+    pattern: [['wood'], ['stick']],
+    result: { id: 'torch', count: 4, maxStack: 64 },
+  },
+  // Furnace (3x3): 8 Cobblestone around center
+  {
+    id: 'furnace',
+    name: 'Furnace',
+    width: 3,
+    height: 3,
+    pattern: [
+      ['cobblestone', 'cobblestone', 'cobblestone'],
+      ['cobblestone', null, 'cobblestone'],
+      ['cobblestone', 'cobblestone', 'cobblestone'],
+    ],
+    result: { id: 'furnace', count: 1, maxStack: 64 },
+  },
+  // 4 Sand -> 4 Glass (in recipe preview for ease)
+  {
+    id: 'sand_to_glass',
+    name: 'Glass Block',
+    width: 2,
+    height: 2,
+    pattern: [
+      ['sand', 'sand'],
+      ['sand', 'sand'],
+    ],
+    result: { id: 'glass', count: 4, maxStack: 64 },
+  },
+];
+
+/**
+ * Validates a crafting grid (2x2 or 3x3) and returns matching recipe & result
+ */
+export function validateCraftingGrid(
+  grid: (SlotItem | null)[][],
+  gridWidth: number,
+  gridHeight: number
+): { recipe: CraftingRecipe; result: SlotItem } | null {
+  // Find bounding box of non-empty items
+  let minR = gridHeight,
+    maxR = -1;
+  let minC = gridWidth,
+    maxC = -1;
+  let hasItems = false;
+
+  for (let r = 0; r < gridHeight; r++) {
+    for (let c = 0; c < gridWidth; c++) {
+      if (grid[r] && grid[r][c] && grid[r][c]!.count > 0) {
+        hasItems = true;
+        if (r < minR) minR = r;
+        if (r > maxR) maxR = r;
+        if (c < minC) minC = c;
+        if (c > maxC) maxC = c;
+      }
+    }
+  }
+
+  if (!hasItems) return null;
+
+  const subH = maxR - minR + 1;
+  const subW = maxC - minC + 1;
+
+  for (const recipe of CRAFTING_RECIPES) {
+    if (recipe.width === subW && recipe.height === subH) {
+      let matches = true;
+      for (let r = 0; r < subH; r++) {
+        for (let c = 0; c < subW; c++) {
+          const expected = recipe.pattern[r][c];
+          const actualItem = grid[minR + r][minC + c];
+          const actual = actualItem ? actualItem.id : null;
+
+          if (expected !== actual) {
+            matches = false;
+            break;
+          }
+        }
+        if (!matches) break;
+      }
+
+      if (matches) {
+        return {
+          recipe,
+          result: { ...recipe.result },
+        };
+      }
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Deducts 1 item from each ingredient slot in the active bounding box
+ */
+export function consumeCraftingIngredients(
+  grid: (SlotItem | null)[][],
+  gridWidth: number,
+  gridHeight: number,
+  recipe: CraftingRecipe
+): void {
+  // Locate top-left of pattern
+  let minR = gridHeight,
+    minC = gridWidth;
+  for (let r = 0; r < gridHeight; r++) {
+    for (let c = 0; c < gridWidth; c++) {
+      if (grid[r] && grid[r][c] && grid[r][c]!.count > 0) {
+        if (r < minR) minR = r;
+        if (c < minC) minC = c;
+      }
+    }
+  }
+
+  for (let r = 0; r < recipe.height; r++) {
+    for (let c = 0; c < recipe.width; c++) {
+      const item = grid[minR + r][minC + c];
+      if (item && item.count > 0) {
+        item.count -= 1;
+        if (item.count <= 0) {
+          grid[minR + r][minC + c] = null;
+        }
+      }
+    }
+  }
+}
+
+/**
+ * 3D Item Drops in Three.js
+ * When a block is broken, spawns a miniature rotating voxel block with falling physics
+ * and magnetic attraction towards player when distance < 1.5 blocks!
+ */
+export interface DroppedItem3D {
+  id: string;
+  item: SlotItem;
+  mesh: THREE.Group;
+  position: THREE.Vector3;
+  velocity: THREE.Vector3;
+  age: number;
+  isGrounded: boolean;
+  isMagnetized: boolean;
+}
+
+export class DroppedItemManager {
+  public items: DroppedItem3D[] = [];
+  private scene: THREE.Scene;
+  private chunkManager: ChunkManager;
+  private dropCounter: number = 0;
+
+  constructor(scene: THREE.Scene, chunkManager: ChunkManager) {
+    this.scene = scene;
+    this.chunkManager = chunkManager;
+  }
+
+  /**
+   * Spawns a 3D miniature item drop at world position
+   */
+  public spawnDrop(
+    item: SlotItem,
+    position: THREE.Vector3,
+    initialVelocity?: THREE.Vector3
+  ): DroppedItem3D {
+    const id = `drop_${++this.dropCounter}_${Date.now().toString(36)}`;
+    const group = new THREE.Group();
+
+    const def = ITEM_REGISTRY[item.id];
+    const colorHex = def ? parseInt(def.color.replace('#', '0x'), 16) : 0x888888;
+
+    // Mini 3D Box or tool shape
+    if (def?.type === 'block') {
+      const geo = new THREE.BoxGeometry(0.26, 0.26, 0.26);
+      const mat = new THREE.MeshLambertMaterial({
+        color: colorHex,
+        roughness: 0.8,
+      } as any);
+      const cube = new THREE.Mesh(geo, mat);
+      cube.castShadow = true;
+      group.add(cube);
+    } else {
+      // Tool / Item flat representation
+      const headGeo = new THREE.BoxGeometry(0.24, 0.24, 0.05);
+      const handleGeo = new THREE.BoxGeometry(0.06, 0.32, 0.04);
+      const headMat = new THREE.MeshLambertMaterial({ color: colorHex });
+      const handleMat = new THREE.MeshLambertMaterial({ color: 0x854d0e });
+
+      const head = new THREE.Mesh(headGeo, headMat);
+      head.position.set(0.08, 0.08, 0);
+      const handle = new THREE.Mesh(handleGeo, handleMat);
+      handle.rotation.z = Math.PI / 4;
+
+      group.add(head);
+      group.add(handle);
+      group.scale.set(0.8, 0.8, 0.8);
+    }
+
+    // Initial upward pop + slight random lateral drift
+    const vel =
+      initialVelocity ||
+      new THREE.Vector3(
+        (Math.random() - 0.5) * 1.8,
+        3.2 + Math.random() * 1.0,
+        (Math.random() - 0.5) * 1.8
+      );
+
+    group.position.copy(position);
+    this.scene.add(group);
+
+    const dropped: DroppedItem3D = {
+      id,
+      item: { ...item },
+      mesh: group,
+      position: position.clone(),
+      velocity: vel,
+      age: 0,
+      isGrounded: false,
+      isMagnetized: false,
+    };
+
+    this.items.push(dropped);
+    return dropped;
+  }
+
+  /**
+   * Physics, Rotation & Magnet Attraction Tick
+   */
+  public update(
+    deltaTime: number,
+    playerPosition: THREE.Vector3,
+    onCollect: (item: SlotItem) => boolean
+  ): void {
+    const dt = Math.min(deltaTime, 0.05);
+    const gravity = -18.0;
+    const toRemove: number[] = [];
+
+    // Player pickup chest target position
+    const playerTarget = playerPosition.clone().add(new THREE.Vector3(0, 0.8, 0));
+
+    for (let i = 0; i < this.items.length; i++) {
+      const drop = this.items[i];
+      drop.age += dt;
+
+      // Distance to player
+      const distToPlayer = drop.position.distanceTo(playerTarget);
+
+      // Magnet check (< 1.8 blocks as specified)
+      if (distToPlayer < 2.0 && drop.age > 0.2) {
+        drop.isMagnetized = true;
+      }
+
+      if (drop.isMagnetized) {
+        // Accelerate smoothly towards player like a magnet
+        const pullDir = new THREE.Vector3()
+          .subVectors(playerTarget, drop.position)
+          .normalize();
+        const pullSpeed = Math.min(14.0, 5.0 + 8.0 * (1.0 / Math.max(0.2, distToPlayer)));
+
+        drop.velocity.lerp(pullDir.multiplyScalar(pullSpeed), dt * 12.0);
+        drop.position.addScaledVector(drop.velocity, dt);
+
+        // Picked up!
+        if (distToPlayer < 0.65) {
+          const collected = onCollect(drop.item);
+          if (collected) {
+            sound.playItemPickup();
+            this.scene.remove(drop.mesh);
+            toRemove.push(i);
+            continue;
+          }
+        }
+      } else {
+        // Natural physics: gravity & terrain floor collision
+        drop.velocity.y += gravity * dt;
+        drop.position.x += drop.velocity.x * dt;
+        drop.position.z += drop.velocity.z * dt;
+        drop.position.y += drop.velocity.y * dt;
+
+        // Voxel collision check below item
+        const checkX = Math.floor(drop.position.x);
+        const checkY = Math.floor(drop.position.y);
+        const checkZ = Math.floor(drop.position.z);
+        const blockBelow = this.chunkManager.getBlockGlobal(checkX, checkY, checkZ);
+
+        if (blockBelow !== BLOCK.AIR) {
+          // Hit solid floor
+          drop.position.y = checkY + 1.0;
+          if (drop.velocity.y < -1.0) {
+            drop.velocity.y = -drop.velocity.y * 0.25; // bounce
+          } else {
+            drop.velocity.y = 0;
+            drop.isGrounded = true;
+          }
+          drop.velocity.x *= 0.85;
+          drop.velocity.z *= 0.85;
+        } else {
+          drop.isGrounded = false;
+        }
+      }
+
+      // Continuous 3D rotation & bobbing
+      drop.mesh.rotation.y += 2.5 * dt;
+      const bobbing = Math.sin(drop.age * 4.0) * 0.04;
+      drop.mesh.position.set(
+        drop.position.x,
+        drop.position.y + bobbing,
+        drop.position.z
+      );
+    }
+
+    // Clean up collected items
+    for (let i = toRemove.length - 1; i >= 0; i--) {
+      this.items.splice(toRemove[i], 1);
+    }
+  }
+
+  public clearAll(): void {
+    for (const drop of this.items) {
+      this.scene.remove(drop.mesh);
+    }
+    this.items = [];
+  }
+}
