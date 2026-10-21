@@ -9,6 +9,7 @@ import { sound } from "./AudioEngine";
 
 export interface RemotePlayer {
   id: string;
+  name?: string;
   x: number;
   y: number;
   z: number;
@@ -20,6 +21,7 @@ export interface RemotePlayer {
   mesh?: THREE.Group;
   headMesh?: THREE.Mesh;
   humanoidModel?: HumanoidModel;
+  nametagSprite?: THREE.Sprite;
   walkTime?: number;
 }
 
@@ -44,6 +46,7 @@ export interface NetworkMob {
 export class NetworkManager {
   private ws: WebSocket | null = null;
   public myId: string | null = null;
+  public myName: string = "Player";
   public myColor: string = "#10b981";
   public remotePlayers: Map<string, RemotePlayer> = new Map();
   public serverMobs: Map<string, NetworkMob> = new Map();
@@ -72,10 +75,22 @@ export class NetworkManager {
   private lastPositionSendTime: number = 0;
   private readonly SEND_INTERVAL_MS: number = 40; // ~25 times per second
 
-  constructor(scene: THREE.Scene, chunkManager: ChunkManager) {
+  constructor(scene: THREE.Scene, chunkManager: ChunkManager, initialNickname?: string) {
     this.scene = scene;
     this.chunkManager = chunkManager;
+    if (initialNickname) {
+      this.myName = initialNickname;
+    }
     this.connect();
+  }
+
+  public setNickname(name: string): void {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    this.myName = trimmed.slice(0, 20);
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+      this.ws.send(JSON.stringify({ type: "set_nickname", name: this.myName }));
+    }
   }
 
   /**
@@ -105,6 +120,9 @@ export class NetworkManager {
         this.isConnected = true;
         this.isConnecting = false;
         console.log("[NetworkManager] Connected to WebSocket server");
+        if (this.myName) {
+          this.ws?.send(JSON.stringify({ type: "set_nickname", name: this.myName }));
+        }
       };
 
       this.ws.onmessage = (event) => {
@@ -148,6 +166,15 @@ export class NetworkManager {
           this.onReceiveMobsTick(msg.mobs);
         }
         this.connectedPlayerCount = this.remotePlayers.size + 1;
+        break;
+      }
+
+      case "player_name_updated": {
+        const player = this.remotePlayers.get(msg.id);
+        if (player) {
+          player.name = msg.name;
+          this.updateRemotePlayerNametag(player);
+        }
         break;
       }
 
@@ -431,6 +458,77 @@ export class NetworkManager {
   }
 
   /**
+   * Generates a 2D canvas-based 3D billboard sprite nametag floating above the player's head.
+   * Matches Minecraft's translucent nametag style with shadowed typography.
+   */
+  public createNametag(name: string, color: string = "#ffffff"): THREE.Sprite {
+    const canvas = document.createElement("canvas");
+    canvas.width = 384;
+    canvas.height = 96;
+    const ctx = canvas.getContext("2d");
+
+    if (ctx) {
+      const displayName = (name || "Player").trim().slice(0, 16);
+      ctx.font = 'bold 34px "Segoe UI", Roboto, "Minecraft", sans-serif';
+      const metrics = ctx.measureText(displayName);
+      const boxW = Math.min(360, Math.max(130, metrics.width + 44));
+      const boxH = 54;
+      const boxX = (384 - boxW) / 2;
+      const boxY = (96 - boxH) / 2;
+
+      // Dark translucent Minecraft nametag plate with rounded corners
+      ctx.fillStyle = "rgba(0, 0, 0, 0.72)";
+      ctx.beginPath();
+      ctx.roundRect(boxX, boxY, boxW, boxH, 10);
+      ctx.fill();
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.35)";
+      ctx.lineWidth = 2.5;
+      ctx.stroke();
+
+      // Shadowed text
+      ctx.shadowColor = "#000000";
+      ctx.shadowBlur = 6;
+      ctx.shadowOffsetX = 2;
+      ctx.shadowOffsetY = 2;
+      ctx.fillStyle = color;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(displayName, 192, 48);
+    }
+
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.minFilter = THREE.LinearFilter;
+    texture.magFilter = THREE.LinearFilter;
+    texture.generateMipmaps = false;
+
+    const spriteMat = new THREE.SpriteMaterial({
+      map: texture,
+      transparent: true,
+      depthTest: false,
+      depthWrite: false,
+    });
+    const sprite = new THREE.Sprite(spriteMat);
+    sprite.renderOrder = 999;
+    sprite.scale.set(2.4, 0.6, 1);
+    sprite.position.set(0, 2.35, 0); // Position above humanoid head
+    return sprite;
+  }
+
+  public updateRemotePlayerNametag(player: RemotePlayer): void {
+    if (!player.mesh) return;
+    if (player.nametagSprite) {
+      player.mesh.remove(player.nametagSprite);
+      if (player.nametagSprite.material.map) {
+        player.nametagSprite.material.map.dispose();
+      }
+      player.nametagSprite.material.dispose();
+    }
+    const newSprite = this.createNametag(player.name || "Player", player.color || "#ffffff");
+    player.nametagSprite = newSprite;
+    player.mesh.add(newSprite);
+  }
+
+  /**
    * Creates classic Minecraft humanoid 3D character mesh for a remote player
    */
   private addRemotePlayer(p: RemotePlayer): void {
@@ -439,6 +537,11 @@ export class NetworkManager {
     // Build classic Humanoid model using EntityModelBuilder
     const humanoid = new HumanoidModel({ isZombie: false });
     humanoid.position.set(p.x, p.y, p.z);
+
+    // Create and attach 3D floating nametag above head
+    const nametag = this.createNametag(p.name || "Player", p.color || "#ffffff");
+    humanoid.add(nametag);
+
     this.scene.add(humanoid);
 
     const playerRecord: RemotePlayer = {
@@ -448,6 +551,7 @@ export class NetworkManager {
       mesh: humanoid,
       headMesh: humanoid.head as unknown as THREE.Mesh,
       humanoidModel: humanoid,
+      nametagSprite: nametag,
       walkTime: 0,
     };
 
@@ -463,6 +567,10 @@ export class NetworkManager {
       existing.targetPos.set(p.x, p.y, p.z);
       existing.targetYaw = p.yaw;
       existing.pitch = p.pitch;
+      if (p.name && p.name !== existing.name) {
+        existing.name = p.name;
+        this.updateRemotePlayerNametag(existing);
+      }
     } else {
       this.addRemotePlayer(p);
     }
@@ -474,6 +582,12 @@ export class NetworkManager {
   private removeRemotePlayer(id: string): void {
     const existing = this.remotePlayers.get(id);
     if (existing) {
+      if (existing.nametagSprite) {
+        if (existing.nametagSprite.material.map) {
+          existing.nametagSprite.material.map.dispose();
+        }
+        existing.nametagSprite.material.dispose();
+      }
       if (existing.mesh) {
         this.scene.remove(existing.mesh);
         existing.mesh.traverse((obj) => {

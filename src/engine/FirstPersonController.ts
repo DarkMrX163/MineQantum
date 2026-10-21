@@ -4,6 +4,7 @@ import { ChunkManager } from "./ChunkManager";
 import { BLOCK, BLOCK_DEFS } from "./types";
 import { sound } from "./AudioEngine";
 import { NetworkManager } from "./NetworkManager";
+import { HumanoidModel } from "./EntityModelBuilder";
 import {
   SlotItem,
   ITEM_REGISTRY,
@@ -26,6 +27,14 @@ export class FirstPersonController {
   public chunkManager: ChunkManager;
   public scene: THREE.Scene;
   public netManager?: NetworkManager;
+
+  // Camera perspective & 3D Local Player Nametag
+  public cameraMode: "first" | "third-back" | "third-front" = "first";
+  public localPlayerModel?: HumanoidModel;
+  public localNametagSprite?: THREE.Sprite;
+  public localPlayerName: string = "Player";
+  private localWalkTime: number = 0;
+  public onCameraModeChange?: (mode: "first" | "third-back" | "third-front") => void;
 
   // Player physics state
   public position: THREE.Vector3 = new THREE.Vector3(8, 30, 8); // Feet position
@@ -136,6 +145,12 @@ export class FirstPersonController {
         this.isFlying = !this.isFlying;
         this.velocity.set(0, 0, 0);
       }
+
+      // Toggle camera perspective (1st person -> 3rd person back -> 3rd person front)
+      if (e.code === "F5") {
+        e.preventDefault();
+        this.toggleCameraMode();
+      }
     });
 
     window.addEventListener("keyup", (e) => {
@@ -200,6 +215,104 @@ export class FirstPersonController {
   // Touch Controls State
   public touchMoveVector = { x: 0, y: 0 }; // x: left(-1)..right(1), y: back(-1)..forward(1)
   public touchJumpRequested: boolean = false;
+
+  /**
+   * Toggles camera view mode between first person and third person
+   */
+  public toggleCameraMode(): void {
+    if (this.cameraMode === "first") {
+      this.cameraMode = "third-back";
+    } else if (this.cameraMode === "third-back") {
+      this.cameraMode = "third-front";
+    } else {
+      this.cameraMode = "first";
+    }
+    if (this.localPlayerModel) {
+      this.localPlayerModel.visible = this.cameraMode !== "first";
+    }
+    sound.playPop();
+    this.onCameraModeChange?.(this.cameraMode);
+  }
+
+  public setLocalPlayerNickname(name: string): void {
+    const clean = (name || "Player").trim().slice(0, 16);
+    this.localPlayerName = clean;
+    if (this.localPlayerModel) {
+      if (this.localNametagSprite) {
+        this.localPlayerModel.remove(this.localNametagSprite);
+        if (this.localNametagSprite.material.map) {
+          this.localNametagSprite.material.map.dispose();
+        }
+        this.localNametagSprite.material.dispose();
+      }
+      this.localNametagSprite = this.createNametagSprite(clean);
+      this.localPlayerModel.add(this.localNametagSprite);
+    }
+  }
+
+  public initLocalPlayerModel(nickname: string): void {
+    this.localPlayerName = (nickname || "Player").trim().slice(0, 16);
+    if (!this.localPlayerModel) {
+      this.localPlayerModel = new HumanoidModel({ isZombie: false });
+      this.localPlayerModel.visible = this.cameraMode !== "first";
+      this.localNametagSprite = this.createNametagSprite(this.localPlayerName);
+      this.localPlayerModel.add(this.localNametagSprite);
+      this.scene.add(this.localPlayerModel);
+    }
+  }
+
+  public createNametagSprite(name: string, color: string = "#38bdf8"): THREE.Sprite {
+    const canvas = document.createElement("canvas");
+    canvas.width = 384;
+    canvas.height = 96;
+    const ctx = canvas.getContext("2d");
+
+    if (ctx) {
+      const displayName = (name || "Player").trim().slice(0, 16);
+      ctx.font = 'bold 34px "Segoe UI", Roboto, "Minecraft", sans-serif';
+      const metrics = ctx.measureText(displayName);
+      const boxW = Math.min(360, Math.max(130, metrics.width + 44));
+      const boxH = 54;
+      const boxX = (384 - boxW) / 2;
+      const boxY = (96 - boxH) / 2;
+
+      // Dark translucent Minecraft nametag plate with rounded corners
+      ctx.fillStyle = "rgba(0, 0, 0, 0.72)";
+      ctx.beginPath();
+      ctx.roundRect(boxX, boxY, boxW, boxH, 10);
+      ctx.fill();
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.35)";
+      ctx.lineWidth = 2.5;
+      ctx.stroke();
+
+      // Shadowed text
+      ctx.shadowColor = "#000000";
+      ctx.shadowBlur = 6;
+      ctx.shadowOffsetX = 2;
+      ctx.shadowOffsetY = 2;
+      ctx.fillStyle = color;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(displayName, 192, 48);
+    }
+
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.minFilter = THREE.LinearFilter;
+    texture.magFilter = THREE.LinearFilter;
+    texture.generateMipmaps = false;
+
+    const spriteMat = new THREE.SpriteMaterial({
+      map: texture,
+      transparent: true,
+      depthTest: false,
+      depthWrite: false,
+    });
+    const sprite = new THREE.Sprite(spriteMat);
+    sprite.renderOrder = 999;
+    sprite.scale.set(2.4, 0.6, 1);
+    sprite.position.set(0, 2.35, 0); // Position above head
+    return sprite;
+  }
 
   /**
    * Rotates camera via touch swipe (deltaYaw horizontal, deltaPitch vertical)
@@ -362,17 +475,51 @@ export class FirstPersonController {
       this.resolveCollisions(dt);
     }
 
-    // Sync camera position to player eye level
-    this.camera.position.set(
-      this.position.x,
-      this.position.y + this.eyeHeight,
-      this.position.z,
-    );
+    // Sync camera position and local player model
+    const eyeY = this.position.y + this.eyeHeight;
+    const euler = new THREE.Euler(0, 0, 0, "YXZ");
+    euler.setFromQuaternion(this.camera.quaternion);
+
+    if (this.cameraMode === "first") {
+      if (this.localPlayerModel) {
+        this.localPlayerModel.visible = false;
+      }
+      this.camera.position.set(this.position.x, eyeY, this.position.z);
+    } else {
+      if (this.localPlayerModel) {
+        this.localPlayerModel.visible = true;
+        this.localPlayerModel.position.set(this.position.x, this.position.y, this.position.z);
+        this.localPlayerModel.rotation.y = euler.y;
+        this.localWalkTime += dt;
+        const isMoving = this.velocity.x !== 0 || this.velocity.z !== 0;
+        this.localPlayerModel.animateWalk(this.localWalkTime, isMoving ? 1.0 : 0.0, isMoving);
+        this.localPlayerModel.setLookDirection(0, euler.x);
+      }
+
+      const forwardVec = new THREE.Vector3();
+      this.camera.getWorldDirection(forwardVec);
+      forwardVec.y = 0;
+      forwardVec.normalize();
+
+      if (this.cameraMode === "third-back") {
+        this.camera.position.set(
+          this.position.x - forwardVec.x * 3.4,
+          eyeY + 0.35,
+          this.position.z - forwardVec.z * 3.4,
+        );
+        this.camera.lookAt(this.position.x, eyeY, this.position.z);
+      } else if (this.cameraMode === "third-front") {
+        this.camera.position.set(
+          this.position.x + forwardVec.x * 3.0,
+          eyeY + 0.3,
+          this.position.z + forwardVec.z * 3.0,
+        );
+        this.camera.lookAt(this.position.x, eyeY, this.position.z);
+      }
+    }
 
     // Send networked position to server (throttled inside NetworkManager)
     if (this.netManager) {
-      const euler = new THREE.Euler(0, 0, 0, "YXZ");
-      euler.setFromQuaternion(this.camera.quaternion);
       this.netManager.sendPosition(
         this.position.x,
         this.position.y,

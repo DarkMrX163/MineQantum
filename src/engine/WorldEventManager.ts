@@ -6,6 +6,8 @@ export type EventType =
   | "monster_hunter"
   | "night_siege"
   | "climb_challenge"
+  | "ancient_pyramid_search"
+  | "boss_raid"
   | "none";
 
 export interface ActiveWorldEvent {
@@ -18,6 +20,7 @@ export interface ActiveWorldEvent {
   targetKillsNeeded?: number;
   currentKills?: number;
   targetHeightNeeded?: number;
+  bossMobId?: string;
   isCompleted: boolean;
   winnerMessage?: string;
 }
@@ -29,9 +32,11 @@ export class WorldEventManager {
   private mobManager: any;
   private treasureMesh: THREE.Group | null = null;
   private treasureSparkle: THREE.Points | null = null;
+  private beaconBeam: THREE.Mesh | null = null;
 
   public onEventCompleted?: (rewardMsg: string) => void;
   public onEventStarted?: (title: string) => void;
+  public onRewardItemsDropped?: (items: { id: string; count: number }[], pos: THREE.Vector3) => void;
 
   constructor(scene: THREE.Scene, chunkManager: any, mobManager: any) {
     this.scene = scene;
@@ -53,10 +58,12 @@ export class WorldEventManager {
         ? type
         : ([
             "treasure_hunt",
+            "ancient_pyramid_search",
+            "boss_raid",
             "monster_hunter",
             "night_siege",
             "climb_challenge",
-          ][Math.floor(Math.random() * 4)] as EventType);
+          ][Math.floor(Math.random() * 6)] as EventType);
 
     const pos = playerPos || new THREE.Vector3(8, 20, 8);
 
@@ -64,10 +71,10 @@ export class WorldEventManager {
       // Find a safe ground spot 25 to 40 blocks away
       const angle = Math.random() * Math.PI * 2;
       const dist = 28 + Math.random() * 15;
-      const tx = pos.x + Math.sin(angle) * dist;
-      const tz = pos.z + Math.cos(angle) * dist;
+      const tx = Math.floor(pos.x + Math.sin(angle) * dist);
+      const tz = Math.floor(pos.z + Math.cos(angle) * dist);
       const ty = this.chunkManager.getTopGroundY(tx, tz);
-      const targetPos = new THREE.Vector3(tx, ty, tz);
+      const targetPos = new THREE.Vector3(tx + 0.5, ty, tz + 0.5);
 
       this.spawnTreasureChest(targetPos);
 
@@ -78,6 +85,60 @@ export class WorldEventManager {
         durationLeft: 300,
         totalDuration: 300,
         targetPos,
+        isCompleted: false,
+      };
+    } else if (selectedType === "ancient_pyramid_search") {
+      // Spawn Ancient Pyramid Shrine 32-45 blocks away
+      const angle = Math.random() * Math.PI * 2;
+      const dist = 32 + Math.random() * 14;
+      const tx = Math.floor(pos.x + Math.sin(angle) * dist);
+      const tz = Math.floor(pos.z + Math.cos(angle) * dist);
+      const ty = this.chunkManager.getTopGroundY(tx, tz);
+
+      // Build 3D Sandstone Pyramid Shrine into the world voxels
+      for (let dx = -2; dx <= 2; dx++) {
+        for (let dz = -2; dz <= 2; dz++) {
+          this.chunkManager.setBlockGlobal(tx + dx, ty, tz + dz, 8, this.scene); // Brick base
+        }
+      }
+      for (let dx = -1; dx <= 1; dx++) {
+        for (let dz = -1; dz <= 1; dz++) {
+          this.chunkManager.setBlockGlobal(tx + dx, ty + 1, tz + dz, 6, this.scene); // Sand mid
+        }
+      }
+
+      const targetPos = new THREE.Vector3(tx + 0.5, ty + 2, tz + 0.5);
+      this.spawnTreasureChest(targetPos, 0x38bdf8); // Cyan beacon beam
+
+      this.currentEvent = {
+        type: "ancient_pyramid_search",
+        title: "🏺 ИВЕНТ: Древняя Пирамида & Алтарь Реликвий (5:00)",
+        description: "Найдите древние руины с золотым алтарём на вершине!",
+        durationLeft: 300,
+        totalDuration: 300,
+        targetPos,
+        isCompleted: false,
+      };
+    } else if (selectedType === "boss_raid") {
+      // Spawn Giant Boss Zombie
+      const bossPos = new THREE.Vector3(pos.x + 16, this.chunkManager.getTopGroundY(pos.x + 16, pos.z + 16), pos.z + 16);
+      let bossId = "";
+      if (this.mobManager) {
+        const mob = this.mobManager.spawnMob("zombie", bossPos);
+        mob.health = 60;
+        mob.walkSpeed = 2.8;
+        mob.meshGroup.scale.set(2.4, 2.4, 2.4); // Giant scale!
+        bossId = mob.id;
+      }
+
+      this.currentEvent = {
+        type: "boss_raid",
+        title: "👹 ИВЕНТ: Рейд на Босса — Царь Зомби [60 HP] (4:00)",
+        description: "Одолейте свирепого Гигантского Царя Зомби!",
+        durationLeft: 240,
+        totalDuration: 240,
+        bossMobId: bossId,
+        targetPos: bossPos,
         isCompleted: false,
       };
     } else if (selectedType === "monster_hunter") {
@@ -137,7 +198,7 @@ export class WorldEventManager {
     return this.currentEvent!;
   }
 
-  private spawnTreasureChest(pos: THREE.Vector3): void {
+  private spawnTreasureChest(pos: THREE.Vector3, beamColor: number = 0xf59e0b): void {
     const group = new THREE.Group();
 
     // Chest Box (Golden chest body)
@@ -160,6 +221,18 @@ export class WorldEventManager {
     latchMesh.position.set(0, 0.5, 0.62);
     group.add(latchMesh);
 
+    // Tall Beacon Beam reaching high into sky
+    const beamGeo = new THREE.CylinderGeometry(0.35, 0.35, 90, 12);
+    const beamMat = new THREE.MeshBasicMaterial({
+      color: beamColor,
+      transparent: true,
+      opacity: 0.4,
+      side: THREE.DoubleSide,
+    });
+    const beam = new THREE.Mesh(beamGeo, beamMat);
+    beam.position.set(0, 45, 0);
+    group.add(beam);
+
     group.position.copy(pos);
     this.scene.add(group);
     this.treasureMesh = group;
@@ -175,7 +248,7 @@ export class WorldEventManager {
     }
     pGeo.setAttribute("position", new THREE.BufferAttribute(pPos, 3));
     const pMat = new THREE.PointsMaterial({
-      color: 0xfde047,
+      color: beamColor,
       size: 0.35,
       transparent: true,
       opacity: 0.9,
@@ -186,21 +259,34 @@ export class WorldEventManager {
     this.treasureSparkle = sparkles;
   }
 
-  public notifyMobKilled(): void {
-    if (
-      this.currentEvent &&
-      this.currentEvent.type === "monster_hunter" &&
-      !this.currentEvent.isCompleted
-    ) {
-      this.currentEvent.currentKills =
-        (this.currentEvent.currentKills || 0) + 1;
+  public notifyMobKilled(mobId?: string, mobType?: string): void {
+    if (!this.currentEvent || this.currentEvent.isCompleted) return;
+
+    if (this.currentEvent.type === "monster_hunter") {
+      this.currentEvent.currentKills = (this.currentEvent.currentKills || 0) + 1;
       sound.playItemPickup();
       if (
-        this.currentEvent.currentKills >=
-        (this.currentEvent.targetKillsNeeded || 4)
+        this.currentEvent.currentKills >= (this.currentEvent.targetKillsNeeded || 4)
       ) {
         this.triggerVictory(
-          "🏆 ПОБЕДА В ИВЕНТЕ! Вы успешно уничтожили всех монстров и получили +10 Золота!",
+          "🏆 ПОБЕДА В ИВЕНТЕ! Вы уничтожили всех монстров и получили Изумруды & Золото!",
+          [
+            { id: "emerald", count: 4 },
+            { id: "gold_ingot", count: 6 },
+            { id: "cooked_beef", count: 4 },
+          ]
+        );
+      }
+    } else if (this.currentEvent.type === "boss_raid") {
+      if ((mobId && mobId === this.currentEvent.bossMobId) || mobType === "zombie") {
+        this.triggerVictory(
+          "🏆 ПОБЕДА В ИВЕНТЕ! Царь Зомби повержен! Награда: Легендарное Оружие & Алмазы!",
+          [
+            { id: "diamond_sword", count: 1 },
+            { id: "diamond", count: 6 },
+            { id: "golden_apple", count: 3 },
+            { id: "emerald", count: 5 },
+          ]
         );
       }
     }
@@ -218,14 +304,30 @@ export class WorldEventManager {
 
     // Event 1: Treasure Hunt check proximity
     if (
-      this.currentEvent.type === "treasure_hunt" &&
+      (this.currentEvent.type === "treasure_hunt" || this.currentEvent.type === "ancient_pyramid_search") &&
       this.currentEvent.targetPos
     ) {
       const dist = playerPos.distanceTo(this.currentEvent.targetPos);
-      if (dist < 2.8) {
-        this.triggerVictory(
-          "🏆 ПОБЕДА В ИВЕНТЕ! Вы нашли Спрятанное Сокровище! Награда: Легендарное Оружие & Изумруды!",
-        );
+      if (dist < 3.0) {
+        const rewardMsg = this.currentEvent.type === "ancient_pyramid_search"
+          ? "🏆 ПОБЕДА В ИВЕНТЕ! Вы разгадали тайну Древней Пирамиды! Награда: Алмазный Запас & Реликвии!"
+          : "🏆 ПОБЕДА В ИВЕНТЕ! Вы нашли Спрятанное Сокровище! Награда: Алмазы & Изумруды!";
+
+        const loot = this.currentEvent.type === "ancient_pyramid_search"
+          ? [
+              { id: "diamond_pickaxe", count: 1 },
+              { id: "diamond", count: 8 },
+              { id: "golden_apple", count: 4 },
+              { id: "emerald", count: 10 },
+            ]
+          : [
+              { id: "diamond", count: 4 },
+              { id: "gold_ingot", count: 8 },
+              { id: "golden_apple", count: 2 },
+              { id: "emerald", count: 5 },
+            ];
+
+        this.triggerVictory(rewardMsg, loot, this.currentEvent.targetPos);
         return;
       }
     }
@@ -237,7 +339,13 @@ export class WorldEventManager {
     ) {
       if (playerPos.y >= this.currentEvent.targetHeightNeeded) {
         this.triggerVictory(
-          `🏆 ПОБЕДА В ИВЕНТЕ! Вы успешно покорили высоту Y=${Math.floor(playerPos.y)}! Награда: Алмазный Вызов!`,
+          `🏆 ПОБЕДА В ИВЕНТЕ! Вы покорили высоту Y=${Math.floor(playerPos.y)}! Награда: Высотный Вызов!`,
+          [
+            { id: "diamond", count: 3 },
+            { id: "golden_apple", count: 2 },
+            { id: "emerald", count: 4 },
+          ],
+          playerPos
         );
         return;
       }
@@ -248,6 +356,12 @@ export class WorldEventManager {
       if (this.currentEvent.type === "night_siege") {
         this.triggerVictory(
           "🏆 ПОБЕДА В ИВЕНТЕ! Вы выдержали Ночную Осаду! Награда: Алхимия & Редкие Руды!",
+          [
+            { id: "diamond_sword", count: 1 },
+            { id: "golden_apple", count: 3 },
+            { id: "emerald", count: 6 },
+          ],
+          playerPos
         );
       } else {
         sound.playBlockBreak();
@@ -260,11 +374,20 @@ export class WorldEventManager {
     }
   }
 
-  private triggerVictory(msg: string): void {
+  private triggerVictory(
+    msg: string,
+    rewards?: { id: string; count: number }[],
+    dropPos?: THREE.Vector3
+  ): void {
     if (!this.currentEvent) return;
     this.currentEvent.isCompleted = true;
     this.currentEvent.winnerMessage = msg;
     sound.playLevelUp();
+
+    if (rewards && rewards.length > 0 && this.onRewardItemsDropped) {
+      this.onRewardItemsDropped(rewards, dropPos || this.currentEvent.targetPos || new THREE.Vector3(8, 22, 8));
+    }
+
     if (this.onEventCompleted) {
       this.onEventCompleted(msg);
     }

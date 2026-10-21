@@ -50,7 +50,15 @@ interface WorldControlsProps {
   activeEmote?: 'wave' | 'dance' | 'sit' | 'swim' | 'none';
   onSelectEmote?: (emote: 'wave' | 'dance' | 'sit' | 'swim' | 'none') => void;
   onClaimChunk?: () => void;
-  onTriggerEvent?: (event: 'treasure_hunt' | 'monster_hunter' | 'night_siege' | 'climb_challenge') => void;
+  onTriggerEvent?: (
+    event:
+      | 'treasure_hunt'
+      | 'ancient_pyramid_search'
+      | 'boss_raid'
+      | 'monster_hunter'
+      | 'night_siege'
+      | 'climb_challenge'
+  ) => void;
 }
 
 export const WorldControls: React.FC<WorldControlsProps> = ({
@@ -454,6 +462,51 @@ export const WorldControls: React.FC<WorldControlsProps> = ({
                   🪑 Sit
                 </button>
               </div>
+
+              {/* World Events & Quests Bar */}
+              {onTriggerEvent && (
+                <div className="flex items-center gap-1.5 bg-slate-950 p-1.5 rounded-xl border border-amber-500/40 text-xs overflow-x-auto">
+                  <span className="text-[10px] font-bold text-amber-400 px-1 font-mono uppercase shrink-0">
+                    ⚡ Ивенты & Квесты:
+                  </span>
+                  <button
+                    onClick={() => onTriggerEvent('treasure_hunt')}
+                    className="px-2 py-0.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-[11px] font-mono font-semibold transition cursor-pointer shrink-0"
+                  >
+                    🔍 Поиск Клада
+                  </button>
+                  <button
+                    onClick={() => onTriggerEvent('ancient_pyramid_search')}
+                    className="px-2 py-0.5 rounded-lg bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 border border-cyan-500/40 text-[11px] font-mono font-semibold transition cursor-pointer shrink-0"
+                  >
+                    🏺 Древняя Пирамида
+                  </button>
+                  <button
+                    onClick={() => onTriggerEvent('boss_raid')}
+                    className="px-2 py-0.5 rounded-lg bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40 text-[11px] font-mono font-semibold transition cursor-pointer shrink-0"
+                  >
+                    👹 Рейд на Босса
+                  </button>
+                  <button
+                    onClick={() => onTriggerEvent('monster_hunter')}
+                    className="px-2 py-0.5 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 text-[11px] font-mono font-semibold transition cursor-pointer shrink-0"
+                  >
+                    🏹 Охотник на Монстров
+                  </button>
+                  <button
+                    onClick={() => onTriggerEvent('night_siege')}
+                    className="px-2 py-0.5 rounded-lg bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 border border-purple-500/40 text-[11px] font-mono font-semibold transition cursor-pointer shrink-0"
+                  >
+                    ⚔️ Ночная Осада
+                  </button>
+                  <button
+                    onClick={() => onTriggerEvent('climb_challenge')}
+                    className="px-2 py-0.5 rounded-lg bg-indigo-500/20 hover:bg-indigo-500/30 text-indigo-300 border border-indigo-500/40 text-[11px] font-mono font-semibold transition cursor-pointer shrink-0"
+                  >
+                    🧗 Высотный Вызов
+                  </button>
+                </div>
+              )}
 
               {/* Action Buttons */}
               <div className="flex items-center gap-2">

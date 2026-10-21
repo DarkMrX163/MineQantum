@@ -28,6 +28,7 @@ const noise3D = createNoise3D();
 // Data Structures
 export interface PlayerState {
   id: string;
+  name: string;
   x: number;
   y: number;
   z: number;
@@ -283,6 +284,7 @@ wss.on('connection', (ws: WebSocket) => {
 
   const playerState: PlayerState = {
     id: playerId,
+    name: `Player_${playerId.slice(0, 4)}`,
     x: 8.0,
     y: 21.0,
     z: 8.0,
@@ -300,6 +302,7 @@ wss.on('connection', (ws: WebSocket) => {
     JSON.stringify({
       type: 'init',
       id: playerId,
+      name: playerState.name,
       color: playerColor,
       players: otherPlayers,
       mobs: mobAI.serializeMobs(),
@@ -315,14 +318,27 @@ wss.on('connection', (ws: WebSocket) => {
     ws
   );
 
-  console.log(`[WebSocket] Player joined: ${playerId}`);
+  console.log(`[WebSocket] Player joined: ${playerId} (${playerState.name})`);
 
   // Message Handler
   ws.on('message', (messageRaw: string) => {
     try {
       const msg = JSON.parse(messageRaw.toString());
 
-      if (msg.type === 'player_move') {
+      if (msg.type === 'set_nickname' || msg.type === 'set_name') {
+        const raw = String(msg.name || '').trim();
+        const safeName = raw.slice(0, 20) || `Player_${playerId.slice(0, 4)}`;
+        const p = connectedPlayers.get(ws);
+        if (p) {
+          p.name = safeName;
+          broadcast({
+            type: 'player_name_updated',
+            id: p.id,
+            name: p.name,
+          });
+          console.log(`[WebSocket] Player ${playerId} set nickname: ${safeName}`);
+        }
+      } else if (msg.type === 'player_move') {
         // Update player coordinates & head orientation
         const p = connectedPlayers.get(ws);
         if (p) {
@@ -418,6 +434,7 @@ setInterval(() => {
 
   const playerUpdates = Array.from(connectedPlayers.values()).map((p) => ({
     id: p.id,
+    name: p.name,
     x: p.x,
     y: p.y,
     z: p.z,

@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { Heart, Flame, Zap } from 'lucide-react';
+import { Heart, Flame, Zap, User, Edit3, Share2, Camera } from 'lucide-react';
 
 import { ActiveWorldEvent } from '../engine/WorldEventManager';
+import { MiniMap, PlayerTransform } from './MiniMap';
 
 interface SurvivalHUDProps {
   health: number; // 0 to 20 (10 hearts)
@@ -12,6 +13,13 @@ interface SurvivalHUDProps {
   damageFlashTrigger: number; // timestamp to trigger 200ms red flash
   activeEvent?: ActiveWorldEvent | null;
   eventNotification?: string | null;
+  playerTransform?: PlayerTransform;
+  nickname?: string;
+  onOpenNicknameModal?: () => void;
+  remotePlayers?: { id: string; name: string; x: number; y: number; z: number; color: string }[];
+  onShareLink?: () => void;
+  onToggleCamera?: () => void;
+  cameraMode?: 'first' | 'third-back' | 'third-front';
 }
 
 export const SurvivalHUD: React.FC<SurvivalHUDProps> = ({
@@ -23,6 +31,13 @@ export const SurvivalHUD: React.FC<SurvivalHUDProps> = ({
   damageFlashTrigger,
   activeEvent,
   eventNotification,
+  playerTransform,
+  nickname = 'Player',
+  onOpenNicknameModal,
+  remotePlayers = [],
+  onShareLink,
+  onToggleCamera,
+  cameraMode = 'first',
 }) => {
   const [isFlashing, setIsFlashing] = useState(false);
 
@@ -142,6 +157,65 @@ export const SurvivalHUD: React.FC<SurvivalHUDProps> = ({
 
   return (
     <>
+      {/* Real-time Navigation Mini-Map for Survival HUD */}
+      <MiniMap playerTransform={playerTransform} activeEvent={activeEvent} remotePlayers={remotePlayers} />
+
+      {/* Player Nickname Badge & Quick Actions (Top Left) */}
+      <div className="fixed top-4 left-4 z-35 pointer-events-auto select-none flex items-center gap-2">
+        <div className="bg-slate-900/90 border border-slate-700/80 backdrop-blur-md rounded-2xl px-3 py-1.5 shadow-xl flex items-center gap-2">
+          {/* Steve Head Icon */}
+          <div className="w-7 h-7 rounded bg-[#c68958] border border-amber-500/80 flex flex-col items-center justify-center overflow-hidden shrink-0 shadow">
+            <div className="w-full h-1.5 bg-[#4a2e18]" />
+            <div className="flex items-center justify-between w-4 mt-0.5">
+              <div className="w-1 h-1 bg-[#2563eb]" />
+              <div className="w-1 h-1 bg-[#2563eb]" />
+            </div>
+            <div className="w-2 h-0.5 bg-[#78350f] mt-0.5" />
+          </div>
+
+          <div className="flex flex-col">
+            <span className="text-[10px] text-slate-400 font-mono font-medium leading-none">Никнейм</span>
+            <span className="text-xs font-mono font-bold text-amber-300 truncate max-w-[120px] drop-shadow">
+              {nickname || 'Player'}
+            </span>
+          </div>
+
+          {/* Edit Nickname Button */}
+          {onOpenNicknameModal && (
+            <button
+              onClick={onOpenNicknameModal}
+              className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-amber-400 border border-slate-700 transition cursor-pointer"
+              title="Сменить никнейм"
+            >
+              <Edit3 className="w-3.5 h-3.5" />
+            </button>
+          )}
+
+          {/* Share Game Link Button */}
+          {onShareLink && (
+            <button
+              onClick={onShareLink}
+              className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-emerald-400 border border-slate-700 transition cursor-pointer"
+              title="Пригласить друга (Скопировать ссылку)"
+            >
+              <Share2 className="w-3.5 h-3.5" />
+            </button>
+          )}
+
+          {/* Camera View Mode Toggle Button */}
+          {onToggleCamera && (
+            <button
+              onClick={onToggleCamera}
+              className="px-2 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-cyan-300 border border-slate-700 text-[10px] font-mono font-bold flex items-center gap-1 transition cursor-pointer"
+              title="Переключить вид камеры (F5)"
+            >
+              <Camera className="w-3.5 h-3.5" />
+              <span>{cameraMode === 'first' ? '1-е лицо' : cameraMode === 'third-back' ? '3-е сзади' : '3-е спереди'}</span>
+            </button>
+          )}
+        </div>
+      </div>
+
       {/* Mini-game Active Event Banner Overlay */}
       {activeEvent && (
         <div className="fixed top-16 left-1/2 -translate-x-1/2 z-35 pointer-events-none select-none flex flex-col items-center max-w-[90vw]">

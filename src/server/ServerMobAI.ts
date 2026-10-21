@@ -495,14 +495,15 @@ export class ServerMobAIEngine {
 
   /**
    * Mob Spawner:
-   * Spawns hostile mobs (Zombies, Creepers) at distance 24–64 blocks from players
-   * in dark areas (light < 7 or nighttime).
+   * Spawns hostile mobs (Zombies, Creepers) at distance 20–55 blocks from players.
+   * Accelerates spawning rate and increases mob cap during nighttime.
    */
   private updateSpawner(dt: number, players: PlayerTarget[]): void {
     if (players.length === 0) return;
 
     this.spawnTimer += dt;
-    if (this.spawnTimer < 4.0) return; // Check spawning every 4 seconds
+    const checkInterval = this.isNight ? 1.5 : 4.0;
+    if (this.spawnTimer < checkInterval) return;
     this.spawnTimer = 0;
 
     // Despawn mobs further than 72 blocks from all players
@@ -513,38 +514,44 @@ export class ServerMobAIEngine {
       }
     });
 
-    // Check Mob Cap
-    if (this.mobs.size >= this.config.mobCap) return;
+    // Nighttime cap is 36 mobs, daytime cap is 16 mobs
+    const currentCap = this.isNight ? 36 : this.config.mobCap;
+    if (this.mobs.size >= currentCap) return;
 
     // Pick random player to spawn around
     const player = players[Math.floor(Math.random() * players.length)];
 
-    // Distance between 24 and 64 blocks
-    const spawnDist = 24.0 + Math.random() * 36.0;
-    const spawnAngle = Math.random() * Math.PI * 2;
-    const spawnX = Math.floor(player.x + Math.sin(spawnAngle) * spawnDist);
-    const spawnZ = Math.floor(player.z + Math.cos(spawnAngle) * spawnDist);
+    // Spawn 1 mob during day, 2-3 mobs at night
+    const packSize = this.isNight ? Math.floor(Math.random() * 2) + 2 : 1;
 
-    // Find surface Y at (spawnX, spawnZ)
-    for (let y = 60; y >= 2; y--) {
-      const ground = this.world.getBlock(spawnX, y - 1, spawnZ);
-      const foot = this.world.getBlock(spawnX, y, spawnZ);
-      const head = this.world.getBlock(spawnX, y + 1, spawnZ);
+    for (let p = 0; p < packSize; p++) {
+      if (this.mobs.size >= currentCap) break;
 
-      // Must have solid ground and 2 blocks of air above
-      if (ground !== 0 && foot === 0 && head === 0) {
-        // Darkness check: only spawn if nighttime OR dark cave/tunnel
-        let isDark = this.isNight;
-        if (!isDark && this.world.getLightLevel) {
-          const light = this.world.getLightLevel(spawnX, y, spawnZ, this.isNight);
-          isDark = light < 7;
-        }
+      const spawnDist = 20.0 + Math.random() * 32.0;
+      const spawnAngle = Math.random() * Math.PI * 2;
+      const spawnX = Math.floor(player.x + Math.sin(spawnAngle) * spawnDist);
+      const spawnZ = Math.floor(player.z + Math.cos(spawnAngle) * spawnDist);
 
-        if (isDark) {
-          // 60% Zombie, 40% Creeper
-          const mobType = Math.random() < 0.4 ? 'creeper' : 'zombie';
-          this.spawnMob(mobType, spawnX + 0.5, y, spawnZ + 0.5);
-          break;
+      // Find surface Y at (spawnX, spawnZ)
+      for (let y = 60; y >= 2; y--) {
+        const ground = this.world.getBlock(spawnX, y - 1, spawnZ);
+        const foot = this.world.getBlock(spawnX, y, spawnZ);
+        const head = this.world.getBlock(spawnX, y + 1, spawnZ);
+
+        // Must have solid ground and 2 blocks of air above
+        if (ground !== 0 && foot === 0 && head === 0) {
+          let isDark = this.isNight;
+          if (!isDark && this.world.getLightLevel) {
+            const light = this.world.getLightLevel(spawnX, y, spawnZ, this.isNight);
+            isDark = light < 7;
+          }
+
+          if (isDark) {
+            const rand = Math.random();
+            const mobType = rand < 0.5 ? 'zombie' : 'creeper';
+            this.spawnMob(mobType, spawnX + 0.5, y, spawnZ + 0.5);
+            break;
+          }
         }
       }
     }

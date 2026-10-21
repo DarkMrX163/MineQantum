@@ -12,9 +12,11 @@ import { Hotbar } from './components/Hotbar';
 import { InventoryModal } from './components/InventoryModal';
 import { SurvivalHUD } from './components/SurvivalHUD';
 import { DeathScreen } from './components/DeathScreen';
+import { JoinModal } from './components/JoinModal';
 import { BLOCK, BlockId, ChunkStats } from './engine/types';
 import { SlotItem, ITEM_REGISTRY } from './engine/InventorySystem';
 import { sound } from './engine/AudioEngine';
+import { PlayerTransform } from './components/MiniMap';
 
 export default function App() {
   const [selectedBlock, setSelectedBlock] = useState<BlockId>(BLOCK.GRASS);
@@ -61,6 +63,16 @@ export default function App() {
   const [hunger, setHunger] = useState(20);
   const [isSprinting, setIsSprinting] = useState(false);
   const [damageFlashTrigger, setDamageFlashTrigger] = useState(0);
+
+  // --- Real-time Player Transform for Mini-Map ---
+  const [playerTransform, setPlayerTransform] = useState<PlayerTransform>({
+    x: 8,
+    y: 20,
+    z: 8,
+    yaw: 0,
+    dirX: 0,
+    dirZ: -1,
+  });
   const [isDead, setIsDead] = useState(false);
   const [deathReason, setDeathReason] = useState('Вы погибли!');
   const [respawnTrigger, setRespawnTrigger] = useState(0);
@@ -68,6 +80,62 @@ export default function App() {
     items: (SlotItem | null)[];
     timestamp: number;
   } | null>(null);
+
+  // --- Player Nickname & Join Modal State ---
+  const [nickname, setNickname] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const queryNick = params.get('nick') || params.get('name');
+      if (queryNick && queryNick.trim().length >= 2) {
+        return queryNick.trim().slice(0, 16);
+      }
+      const saved = localStorage.getItem('mc_nickname');
+      if (saved && saved.trim().length >= 2) {
+        return saved.trim().slice(0, 16);
+      }
+    }
+    return '';
+  });
+
+  const [hasEnteredWorld, setHasEnteredWorld] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      return !!sessionStorage.getItem('mc_nickname_confirmed');
+    }
+    return false;
+  });
+
+  const [isJoinModalOpen, setIsJoinModalOpen] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      return !sessionStorage.getItem('mc_nickname_confirmed');
+    }
+    return true;
+  });
+
+  const [remotePlayers, setRemotePlayers] = useState<
+    { id: string; name: string; x: number; y: number; z: number; color: string }[]
+  >([]);
+
+  const [cameraMode, setCameraMode] = useState<'first' | 'third-back' | 'third-front'>('first');
+
+  const handleJoinWorld = useCallback((chosenNick: string) => {
+    const clean = chosenNick.trim().slice(0, 16) || 'Player';
+    setNickname(clean);
+    localStorage.setItem('mc_nickname', clean);
+    sessionStorage.setItem('mc_nickname_confirmed', 'true');
+    setIsJoinModalOpen(false);
+    setHasEnteredWorld(true);
+    handleEventNotification(`Добро пожаловать в мир, ${clean}!`);
+    setPointerLockRequested(true);
+  }, []);
+
+  const handleShareLink = useCallback(() => {
+    sound.playItemPickup();
+    const cleanNick = nickname || 'Player';
+    const url = new URL(window.location.href);
+    url.searchParams.set('nick', cleanNick);
+    navigator.clipboard.writeText(url.toString());
+    handleEventNotification('Ссылка скопирована! Отправьте её другу, чтобы играть вместе.');
+  }, [nickname]);
 
   // Sprinting requires hunger > 6 (Minecraft mechanic)
   const canSprint = hunger > 6;
@@ -405,6 +473,10 @@ export default function App() {
           triggerEvent={triggerEvent}
           onActiveEventUpdate={setActiveEvent}
           onEventNotification={handleEventNotification}
+          onPlayerTransformUpdate={setPlayerTransform}
+          nickname={nickname || 'Player'}
+          onRemotePlayersUpdate={setRemotePlayers}
+          onCameraModeChange={setCameraMode}
         />
       </div>
 
@@ -422,7 +494,7 @@ export default function App() {
         </div>
       )}
 
-      {/* 20 HP (10 Hearts) & 20 Hunger (10 Drumsticks) Survival HUD */}
+      {/* 20 HP (10 Hearts) & 20 Hunger (10 Drumsticks) Survival HUD + MiniMap */}
       {activeTab === 'game' && !isDead && (
         <SurvivalHUD
           health={health}
@@ -431,6 +503,12 @@ export default function App() {
           damageFlashTrigger={damageFlashTrigger}
           activeEvent={activeEvent}
           eventNotification={eventNotification}
+          playerTransform={playerTransform}
+          nickname={nickname || 'Player'}
+          onOpenNicknameModal={() => setIsJoinModalOpen(true)}
+          remotePlayers={remotePlayers}
+          onShareLink={handleShareLink}
+          cameraMode={cameraMode}
         />
       )}
 
@@ -493,6 +571,15 @@ export default function App() {
         onChangeWeather={setWeather}
         activeEmote={activeEmote}
         onSelectEmote={setActiveEmote}
+      />
+
+      {/* Join / Change Nickname Modal */}
+      <JoinModal
+        isOpen={isJoinModalOpen}
+        currentNickname={nickname}
+        onJoin={handleJoinWorld}
+        onClose={() => setIsJoinModalOpen(false)}
+        isInitialJoin={!hasEnteredWorld}
       />
     </div>
   );

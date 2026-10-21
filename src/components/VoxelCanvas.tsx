@@ -28,6 +28,7 @@ import {
 import { BlockParticleManager } from "../engine/BlockParticleManager";
 import { FirstPersonHands } from "../engine/FirstPersonHands";
 import { VILLAGER_SPAWN_POINTS } from "../engine/VillageGenerator";
+import { PlayerTransform } from "./MiniMap";
 
 interface VoxelCanvasProps {
   selectedBlock: BlockId;
@@ -81,6 +82,10 @@ interface VoxelCanvasProps {
   triggerEvent?: EventType | null;
   onActiveEventUpdate?: (event: ActiveWorldEvent | null) => void;
   onEventNotification?: (msg: string) => void;
+  onPlayerTransformUpdate?: (transform: PlayerTransform) => void;
+  nickname?: string;
+  onRemotePlayersUpdate?: (players: { id: string; name: string; x: number; y: number; z: number; color: string }[]) => void;
+  onCameraModeChange?: (mode: "first" | "third-back" | "third-front") => void;
 }
 
 export const VoxelCanvas: React.FC<VoxelCanvasProps> = ({
@@ -118,6 +123,10 @@ export const VoxelCanvas: React.FC<VoxelCanvasProps> = ({
   triggerEvent,
   onActiveEventUpdate,
   onEventNotification,
+  onPlayerTransformUpdate,
+  nickname = "Player",
+  onRemotePlayersUpdate,
+  onCameraModeChange,
 }) => {
   const mountRef = useRef<HTMLDivElement>(null);
 
@@ -126,6 +135,7 @@ export const VoxelCanvas: React.FC<VoxelCanvasProps> = ({
   const mobManagerRef = useRef<MobManager | null>(null);
   const dropManagerRef = useRef<DroppedItemManager | null>(null);
   const eventManagerRef = useRef<WorldEventManager | null>(null);
+  const netManagerRef = useRef<NetworkManager | null>(null);
   const highlightMeshRef = useRef<THREE.Mesh | null>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
   const dirLightRef = useRef<THREE.DirectionalLight | null>(null);
@@ -137,6 +147,17 @@ export const VoxelCanvas: React.FC<VoxelCanvasProps> = ({
   useEffect(() => {
     selectedBlockRef.current = selectedBlock;
   }, [selectedBlock]);
+
+  useEffect(() => {
+    if (nickname) {
+      if (netManagerRef.current) {
+        netManagerRef.current.setNickname(nickname);
+      }
+      if (controllerRef.current) {
+        controllerRef.current.setLocalPlayerNickname(nickname);
+      }
+    }
+  }, [nickname]);
 
   useEffect(() => {
     if (!mountRef.current) return;
@@ -227,6 +248,10 @@ export const VoxelCanvas: React.FC<VoxelCanvasProps> = ({
       scene,
     );
     controller.position.set(8, 28, 8);
+    controller.initLocalPlayerModel(nickname);
+    controller.onCameraModeChange = (mode) => {
+      onCameraModeChange?.(mode);
+    };
     controllerRef.current = controller;
 
     // 7.5 First-Person Hands & Held Item Renderer
@@ -237,7 +262,8 @@ export const VoxelCanvas: React.FC<VoxelCanvasProps> = ({
     camera.add(handheldTorchLight);
 
     // Initialize NetworkManager for WebSockets, position throttling & remote player lerping
-    const netManager = new NetworkManager(scene, chunkManager);
+    const netManager = new NetworkManager(scene, chunkManager, nickname);
+    netManagerRef.current = netManager;
     controller.netManager = netManager;
 
     // React to mob attacks and explosion knockback
@@ -402,9 +428,26 @@ export const VoxelCanvas: React.FC<VoxelCanvasProps> = ({
       if (onActiveEventUpdate) onActiveEventUpdate(null);
     };
 
-    // Mob loot drop on death (Spawns 3D collectible item entities in the world)
+    // Physical 3D loot drops on event completion!
+    eventManager.onRewardItemsDropped = (items, pos) => {
+      items.forEach((reward) => {
+        const itemDef = ITEM_REGISTRY[reward.id];
+        dropManager.spawnDrop(
+          {
+            id: reward.id,
+            count: reward.count,
+            maxStack: itemDef?.maxStack || 64,
+            durability: itemDef?.maxDurability,
+            maxDurability: itemDef?.maxDurability,
+          },
+          pos.clone().add(new THREE.Vector3((Math.random() - 0.5) * 1.5, 0.6, (Math.random() - 0.5) * 1.5))
+        );
+      });
+    };
+
+    // Mob kill event & loot drop on death
     mobManager.onMobKilled = (type, pos) => {
-      eventManager.notifyMobKilled();
+      eventManager.notifyMobKilled(undefined, type);
       const dropPos = pos.clone().add(new THREE.Vector3(0, 0.5, 0));
 
       if (type === "bird") {
@@ -520,6 +563,9 @@ export const VoxelCanvas: React.FC<VoxelCanvasProps> = ({
 
     let lastNightPhase = isNight;
     let lastPropWeather = weather;
+    let lastTransformBroadcastTime = 0;
+    let nightSpawnCooldown = 0;
+    let autoEventCooldown = 0;
 
     const animate = () => {
       animId = requestAnimationFrame(animate);
@@ -609,41 +655,29 @@ export const VoxelCanvas: React.FC<VoxelCanvasProps> = ({
         lastNightPhase = isNightNow;
         mobManager.clearAll();
         if (isNightNow) {
-          // Nighttime: Hostile monsters spawn (Zombies, Skeletons, Creepers, Endermen)!
+          // Nighttime: Spawn initial surrounding horde of hostile monsters!
+          onEventNotification?.("⚠️ Наступила ночь! Опасная орда монстров выходит на охоту...");
+          sound.playHurt();
           const px = controller.position.x;
           const pz = controller.position.z;
-          mobManager.spawnMob(
-            "zombie",
-            new THREE.Vector3(
-              px + 18,
-              chunkManager.getTopGroundY(px + 18, pz + 14),
-              pz + 14,
-            ),
-          );
-          mobManager.spawnMob(
-            "skeleton",
-            new THREE.Vector3(
-              px - 16,
-              chunkManager.getTopGroundY(px - 16, pz - 18),
-              pz - 18,
-            ),
-          );
-          mobManager.spawnMob(
-            "creeper",
-            new THREE.Vector3(
-              px + 12,
-              chunkManager.getTopGroundY(px + 12, pz - 20),
-              pz - 20,
-            ),
-          );
-          mobManager.spawnMob(
-            "enderman",
-            new THREE.Vector3(
-              px - 22,
-              chunkManager.getTopGroundY(px - 22, pz + 16),
-              pz + 16,
-            ),
-          );
+
+          const hostileTypes: ("zombie" | "skeleton" | "creeper" | "enderman")[] = [
+            "zombie", "zombie", "zombie", "zombie",
+            "skeleton", "skeleton", "skeleton",
+            "creeper", "creeper", "creeper",
+            "enderman", "enderman"
+          ];
+
+          hostileTypes.forEach((type, idx) => {
+            const angle = (idx / hostileTypes.length) * Math.PI * 2 + Math.random() * 0.3;
+            const dist = 16 + Math.random() * 20;
+            const mx = Math.floor(px + Math.sin(angle) * dist);
+            const mz = Math.floor(pz + Math.cos(angle) * dist);
+            const my = chunkManager.getTopGroundY(mx, mz);
+            if (my > 1) {
+              mobManager.spawnMob(type, new THREE.Vector3(mx, my, mz));
+            }
+          });
         } else {
           // Daytime: Friendly pets & animals spawn (Steve, Cow, Sheep, Pig)!
           const px = controller.position.x;
@@ -686,6 +720,47 @@ export const VoxelCanvas: React.FC<VoxelCanvasProps> = ({
         }
       }
 
+      // Continuous Nighttime Hostile Mob Spawner (spawns new mobs continuously during night)
+      if (isNightNow) {
+        nightSpawnCooldown += delta;
+        if (nightSpawnCooldown >= 2.5) {
+          nightSpawnCooldown = 0;
+
+          let hostileCount = 0;
+          mobManager.mobs.forEach((m) => {
+            if (m.type === "zombie" || m.type === "creeper" || m.type === "skeleton" || m.type === "enderman") {
+              hostileCount++;
+            }
+          });
+
+          // Maintain up to 24 hostile monsters during nighttime
+          if (hostileCount < 24) {
+            const px = controller.position.x;
+            const pz = controller.position.z;
+            const pool: ("zombie" | "skeleton" | "creeper" | "enderman")[] = [
+              "zombie", "zombie", "skeleton", "creeper", "enderman"
+            ];
+
+            const spawnBatch = Math.min(3, 24 - hostileCount);
+            for (let i = 0; i < spawnBatch; i++) {
+              const angle = Math.random() * Math.PI * 2;
+              const dist = 18 + Math.random() * 22;
+              const mx = Math.floor(px + Math.sin(angle) * dist);
+              const mz = Math.floor(pz + Math.cos(angle) * dist);
+              const my = chunkManager.getTopGroundY(mx, mz);
+              if (my > 1) {
+                const randType = pool[Math.floor(Math.random() * pool.length)];
+                mobManager.spawnMob(randType, new THREE.Vector3(mx, my, mz));
+              }
+            }
+
+            if (onMobCountUpdate) {
+              onMobCountUpdate(mobManager.mobs.size);
+            }
+          }
+        }
+      }
+
       // Update controller physics
       controller.update(delta);
 
@@ -716,6 +791,19 @@ export const VoxelCanvas: React.FC<VoxelCanvasProps> = ({
       // Interpolate remote players smooth movement
       netManager.update(delta);
 
+      // Send remote players list for MiniMap and HUD radar
+      if (onRemotePlayersUpdate) {
+        const playerArray = Array.from(netManager.remotePlayers.values()).map((p) => ({
+          id: p.id,
+          name: p.name || "Player",
+          x: p.targetPos ? p.targetPos.x : p.x,
+          y: p.targetPos ? p.targetPos.y : p.y,
+          z: p.targetPos ? p.targetPos.z : p.z,
+          color: p.color || "#ffffff",
+        }));
+        onRemotePlayersUpdate(playerArray);
+      }
+
       // Update active mobs (Steve, Zombie, Creeper) wandering AI & walk animations
       mobManager.update(delta, controller.position);
 
@@ -727,7 +815,19 @@ export const VoxelCanvas: React.FC<VoxelCanvasProps> = ({
       // Update Mini-game World Events
       eventManager.update(delta, controller.position);
       if (onActiveEventUpdate && eventManager.currentEvent) {
-        onActiveEventUpdate({ ...eventManager.currentEvent });
+        onActiveEventUpdate(Object.assign({}, eventManager.currentEvent));
+      }
+
+      // Automatic World Event Scheduler (triggers a random event every 3.5 minutes)
+      autoEventCooldown += delta;
+      if (autoEventCooldown >= 210) {
+        autoEventCooldown = 0;
+        if (!eventManager.currentEvent) {
+          eventManager.startEvent(undefined, controller.position);
+          if (onActiveEventUpdate && eventManager.currentEvent) {
+            onActiveEventUpdate(Object.assign({}, eventManager.currentEvent));
+          }
+        }
       }
 
       // Dynamic Chunk Loading
@@ -742,6 +842,26 @@ export const VoxelCanvas: React.FC<VoxelCanvasProps> = ({
       onStatsUpdate(chunkManager.getStats());
       if (onMultiplayerStatsUpdate) {
         onMultiplayerStatsUpdate(netManager.connectedPlayerCount);
+      }
+
+      // Broadcast player transform for Survival HUD Mini-Map
+      if (
+        onPlayerTransformUpdate &&
+        elapsedTime - lastTransformBroadcastTime > 0.05
+      ) {
+        lastTransformBroadcastTime = elapsedTime;
+        const euler = new THREE.Euler(0, 0, 0, "YXZ");
+        euler.setFromQuaternion(camera.quaternion);
+        const lookDir = new THREE.Vector3();
+        camera.getWorldDirection(lookDir);
+        onPlayerTransformUpdate({
+          x: controller.position.x,
+          y: controller.position.y,
+          z: controller.position.z,
+          yaw: euler.y,
+          dirX: lookDir.x,
+          dirZ: lookDir.z,
+        });
       }
 
       // Update Highlight wireframe box & Breaking Crack visual
