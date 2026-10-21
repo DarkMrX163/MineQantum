@@ -301,6 +301,73 @@ export function createTextureAtlas(): {
   // 20: Redstone Ore
   paintOre(20, "#e63946");
 
+  // 21: Oak Door (Closed) - authentic wood plank frame, panel recessed detailing, window slits & brass handle
+  paintPaletteNoise(21, [180, 115, 55], [
+    [-12, -12, -12],
+    [0, 0, 0],
+    [12, 12, 12],
+  ]);
+  const doorRect = getTileRect(21);
+  // Outer frame & panel divides
+  ctx.fillStyle = "#5c2c06";
+  ctx.fillRect(doorRect.x, doorRect.y, 16, 1);
+  ctx.fillRect(doorRect.x, doorRect.y + 15, 16, 1);
+  ctx.fillRect(doorRect.x, doorRect.y, 1, 16);
+  ctx.fillRect(doorRect.x + 15, doorRect.y, 1, 16);
+  ctx.fillRect(doorRect.x, doorRect.y + 8, 16, 1); // Horizontal divider
+  // Recessed panels
+  ctx.fillStyle = "#a16207";
+  ctx.fillRect(doorRect.x + 2, doorRect.y + 2, 5, 5);
+  ctx.fillRect(doorRect.x + 9, doorRect.y + 2, 5, 5);
+  ctx.fillRect(doorRect.x + 2, doorRect.y + 10, 5, 4);
+  ctx.fillRect(doorRect.x + 9, doorRect.y + 10, 5, 4);
+  // Upper window slits
+  ctx.fillStyle = "#262626";
+  ctx.fillRect(doorRect.x + 3, doorRect.y + 3, 3, 3);
+  ctx.fillRect(doorRect.x + 10, doorRect.y + 3, 3, 3);
+  // Brass / iron door handle
+  ctx.fillStyle = "#fbbf24";
+  ctx.fillRect(doorRect.x + 13, doorRect.y + 7, 2, 2);
+  ctx.fillStyle = "#78350f";
+  ctx.fillRect(doorRect.x + 13, doorRect.y + 9, 1, 2);
+
+  // 22: Oak Door (Open) - thin door frame perspective, open passable opening
+  const openDoorRect = getTileRect(22);
+  ctx.clearRect(openDoorRect.x, openDoorRect.y, 16, 16);
+  // Outer doorway frame
+  ctx.fillStyle = "#5c2c06";
+  ctx.fillRect(openDoorRect.x, openDoorRect.y, 3, 16); // Left jamb / open door edge
+  ctx.fillStyle = "#92400e";
+  ctx.fillRect(openDoorRect.x + 1, openDoorRect.y + 1, 2, 14);
+  ctx.fillStyle = "#fbbf24";
+  ctx.fillRect(openDoorRect.x + 2, openDoorRect.y + 8, 1, 2); // Handle on side
+  // Top/bottom jambs
+  ctx.fillStyle = "#78350f";
+  ctx.fillRect(openDoorRect.x, openDoorRect.y, 16, 1);
+  ctx.fillRect(openDoorRect.x, openDoorRect.y + 15, 16, 1);
+
+  // 23: Village Path (Dirt / Gravel pathway)
+  paintPaletteNoise(23, [160, 110, 50], [
+    [-15, -15, -15],
+    [-6, -6, -6],
+    [0, 0, 0],
+    [8, 8, 8],
+    [18, 18, 18],
+  ]);
+  const pathRect = getTileRect(23);
+  ctx.fillStyle = "#78350f";
+  for (let i = 0; i < 15; i++) {
+    const px = Math.floor(Math.random() * 16);
+    const py = Math.floor(Math.random() * 16);
+    ctx.fillRect(pathRect.x + px, pathRect.y + py, 1, 1);
+  }
+  ctx.fillStyle = "#ca8a04";
+  for (let i = 0; i < 10; i++) {
+    const px = Math.floor(Math.random() * 16);
+    const py = Math.floor(Math.random() * 16);
+    ctx.fillRect(pathRect.x + px, pathRect.y + py, 1, 1);
+  }
+
   // Create Three.js CanvasTexture with NearestFilter for pixel perfection
   const texture = new THREE.CanvasTexture(canvas);
   texture.magFilter = THREE.NearestFilter;

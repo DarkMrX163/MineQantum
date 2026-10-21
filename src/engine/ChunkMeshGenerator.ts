@@ -320,6 +320,56 @@ export function generateChunkGeometry(
 
         const blockDef = BLOCK_DEFS[blockId] || BLOCK_DEFS[BLOCK.STONE];
 
+        // Authentic Minecraft 3D Torch model (slender 2x10x2 pixel post centered in block)
+        if (blockId === BLOCK.TORCH) {
+          const x0 = x + 7 / 16;
+          const x1 = x + 9 / 16;
+          const y0 = y;
+          const y1 = y + 10 / 16;
+          const z0 = z + 7 / 16;
+          const z1 = z + 9 / 16;
+
+          const tileUV = getTileUVs(blockDef.tiles.sides);
+          const quadUVs = [
+            [tileUV.uMin, tileUV.vMin],
+            [tileUV.uMax, tileUV.vMin],
+            [tileUV.uMax, tileUV.vMax],
+            [tileUV.uMin, tileUV.vMax],
+          ];
+
+          // 6 faces of the torch post
+          const torchFaces = [
+            { normal: [0, 0, 1], corners: [[x0, y0, z1], [x1, y0, z1], [x1, y1, z1], [x0, y1, z1]], tint: 0.95 },
+            { normal: [0, 0, -1], corners: [[x1, y0, z0], [x0, y0, z0], [x0, y1, z0], [x1, y1, z0]], tint: 0.9 },
+            { normal: [1, 0, 0], corners: [[x1, y0, z1], [x1, y0, z0], [x1, y1, z0], [x1, y1, z1]], tint: 0.92 },
+            { normal: [-1, 0, 0], corners: [[x0, y0, z0], [x0, y0, z1], [x0, y1, z1], [x0, y1, z0]], tint: 0.92 },
+            { normal: [0, 1, 0], corners: [[x0, y1, z1], [x1, y1, z1], [x1, y1, z0], [x0, y1, z0]], tint: 1.0 },
+            { normal: [0, -1, 0], corners: [[x0, y0, z0], [x1, y0, z0], [x1, y0, z1], [x0, y0, z1]], tint: 0.75 },
+          ];
+
+          for (const tf of torchFaces) {
+            renderedFaceCount++;
+            naiveFaceCount++;
+            const cr = 1.0 * tf.tint;
+            const cg = 0.9 * tf.tint;
+            const cb = 0.65 * tf.tint;
+
+            for (let i = 0; i < 4; i++) {
+              const c = tf.corners[i];
+              positions.push(c[0], c[1], c[2]);
+              normals.push(tf.normal[0], tf.normal[1], tf.normal[2]);
+              uvs.push(quadUVs[i][0], quadUVs[i][1]);
+              colors.push(cr, cg, cb);
+            }
+
+            const vOffset = faceIndex * 4;
+            indices.push(vOffset, vOffset + 1, vOffset + 2);
+            indices.push(vOffset, vOffset + 2, vOffset + 3);
+            faceIndex++;
+          }
+          continue;
+        }
+
         // Process 6 faces
         for (const face of FACES) {
           naiveFaceCount++;

@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { VoxelCanvas } from './components/VoxelCanvas';
 import { WorldControls } from './components/WorldControls';
 import { CodeViewer } from './components/CodeViewer';
@@ -36,7 +36,7 @@ export default function App() {
   const [claimStatus, setClaimStatus] = useState<string | null>(null);
   const [activeEmote, setActiveEmote] = useState<'wave' | 'dance' | 'sit' | 'swim' | 'none'>('none');
   const [spawnMobTrigger, setSpawnMobTrigger] = useState<{
-    type: 'steve' | 'zombie' | 'creeper' | 'skeleton' | 'enderman' | 'cow' | 'sheep' | 'pig';
+    type: 'steve' | 'zombie' | 'creeper' | 'skeleton' | 'enderman' | 'cow' | 'sheep' | 'pig' | 'villager';
     timestamp: number;
   } | null>(null);
   const [clearMobsTrigger, setClearMobsTrigger] = useState(0);
@@ -92,6 +92,12 @@ export default function App() {
   const [selectedHotbarIndex, setSelectedHotbarIndex] = useState(0);
   const [isInventoryOpen, setIsInventoryOpen] = useState(false);
 
+  // Synchronous refs for accurate, atomic item collection without duplicate race conditions
+  const hotbarRef = useRef(hotbar);
+  hotbarRef.current = hotbar;
+  const inventoryRef = useRef(inventory);
+  inventoryRef.current = inventory;
+
   // Computed held item and placing block
   const heldItem = hotbar[selectedHotbarIndex];
   const heldDef = heldItem ? ITEM_REGISTRY[heldItem.id] : null;
@@ -125,7 +131,7 @@ export default function App() {
     setPointerLockRequested(true);
   };
 
-  const handleSpawnMob = useCallback((type: 'steve' | 'zombie' | 'creeper' | 'skeleton' | 'enderman' | 'cow' | 'sheep' | 'pig') => {
+  const handleSpawnMob = useCallback((type: 'steve' | 'zombie' | 'creeper' | 'skeleton' | 'enderman' | 'cow' | 'sheep' | 'pig' | 'villager') => {
     setSpawnMobTrigger({ type, timestamp: Date.now() });
   }, []);
 
@@ -169,75 +175,74 @@ export default function App() {
     });
   }, [selectedHotbarIndex]);
 
-  // 3D Item Drop collection: add to hotbar or main inventory
+  // 3D Item Drop collection: add to hotbar or main inventory (Minecraft style: 1 item = +1 count in stack)
   const handleCollectDrop = useCallback((dropItem: SlotItem): boolean => {
     let remainder = dropItem.count;
-
-    // 1. Try stacking into matching hotbar slots
-    setHotbar((prevHotbar) => {
-      const newHotbar = [...prevHotbar];
-      for (let i = 0; i < 9 && remainder > 0; i++) {
-        const slot = newHotbar[i];
-        if (slot && slot.id === dropItem.id && slot.count < slot.maxStack) {
-          const addable = Math.min(remainder, slot.maxStack - slot.count);
-          newHotbar[i] = { ...slot, count: slot.count + addable };
-          remainder -= addable;
-        }
-      }
-      return newHotbar;
-    });
-
     if (remainder <= 0) return true;
 
-    // 2. Try stacking into main inventory slots
-    setInventory((prevInv) => {
-      const newInv = [...prevInv];
-      for (let i = 0; i < 27 && remainder > 0; i++) {
-        const slot = newInv[i];
-        if (slot && slot.id === dropItem.id && slot.count < slot.maxStack) {
-          const addable = Math.min(remainder, slot.maxStack - slot.count);
-          newInv[i] = { ...slot, count: slot.count + addable };
-          remainder -= addable;
-        }
+    // Use current synchronous snapshot
+    const currentHotbar = [...hotbarRef.current];
+    const currentInv = [...inventoryRef.current];
+
+    // 1. First attempt: Stack into existing matching slots in hotbar (0..8)
+    for (let i = 0; i < 9 && remainder > 0; i++) {
+      const slot = currentHotbar[i];
+      if (slot && slot.id === dropItem.id && slot.count < slot.maxStack) {
+        const addable = Math.min(remainder, slot.maxStack - slot.count);
+        currentHotbar[i] = { ...slot, count: slot.count + addable };
+        remainder -= addable;
       }
-      return newInv;
-    });
+    }
 
-    if (remainder <= 0) return true;
+    // 2. Second attempt: Stack into existing matching slots in main inventory (0..26)
+    for (let i = 0; i < 27 && remainder > 0; i++) {
+      const slot = currentInv[i];
+      if (slot && slot.id === dropItem.id && slot.count < slot.maxStack) {
+        const addable = Math.min(remainder, slot.maxStack - slot.count);
+        currentInv[i] = { ...slot, count: slot.count + addable };
+        remainder -= addable;
+      }
+    }
 
-    // 3. Place into first empty hotbar slot
-    let placedInHotbar = false;
-    setHotbar((prevHotbar) => {
-      const newHotbar = [...prevHotbar];
-      for (let i = 0; i < 9 && remainder > 0; i++) {
-        if (!newHotbar[i]) {
-          newHotbar[i] = { ...dropItem, count: remainder };
+    // 3. Third attempt: If still remainder > 0, find first empty hotbar slot
+    if (remainder > 0) {
+      for (let i = 0; i < 9; i++) {
+        if (!currentHotbar[i]) {
+          currentHotbar[i] = { ...dropItem, count: remainder };
           remainder = 0;
-          placedInHotbar = true;
           break;
         }
       }
-      return newHotbar;
-    });
+    }
 
-    if (placedInHotbar || remainder <= 0) return true;
-
-    // 4. Place into first empty inventory slot
-    let placedInInv = false;
-    setInventory((prevInv) => {
-      const newInv = [...prevInv];
-      for (let i = 0; i < 27 && remainder > 0; i++) {
-        if (!newInv[i]) {
-          newInv[i] = { ...dropItem, count: remainder };
+    // 4. Fourth attempt: If still remainder > 0, find first empty main inventory slot
+    if (remainder > 0) {
+      for (let i = 0; i < 27; i++) {
+        if (!currentInv[i]) {
+          currentInv[i] = { ...dropItem, count: remainder };
           remainder = 0;
-          placedInInv = true;
           break;
         }
       }
-      return newInv;
-    });
+    }
 
-    return placedInInv || remainder <= 0;
+    // Check if any items were collected
+    if (remainder < dropItem.count) {
+      // Immediately update refs so subsequent collections on the same or next tick see the new state!
+      hotbarRef.current = currentHotbar;
+      inventoryRef.current = currentInv;
+      setHotbar(currentHotbar);
+      setInventory(currentInv);
+
+      if (remainder <= 0) {
+        return true; // Completely collected!
+      } else {
+        dropItem.count = remainder; // Partial pickup
+        return false;
+      }
+    }
+
+    return false; // Inventory is full
   }, []);
 
   const handleToggleInventory = () => {

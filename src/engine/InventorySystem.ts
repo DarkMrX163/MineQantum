@@ -186,6 +186,24 @@ export const ITEM_REGISTRY: Record<string, ItemDefinition> = {
     color: '#38bdf8',
     description: 'Precious gemstone used to forge high-tier gear.',
   },
+  emerald: {
+    id: 'emerald',
+    name: 'Emerald',
+    type: 'material',
+    miningSpeedMultiplier: 1.0,
+    maxStack: 64,
+    color: '#10b981',
+    description: 'Sparkling green gemstone used for trading with villagers.',
+  },
+  wheat: {
+    id: 'wheat',
+    name: 'Wheat',
+    type: 'material',
+    miningSpeedMultiplier: 1.0,
+    maxStack: 64,
+    color: '#eab308',
+    description: 'Golden wheat harvested from village farms.',
+  },
   coal: {
     id: 'coal',
     name: 'Coal',
@@ -194,6 +212,81 @@ export const ITEM_REGISTRY: Record<string, ItemDefinition> = {
     maxStack: 64,
     color: '#334155',
     description: 'Fuel for torches and smelting.',
+  },
+  feather: {
+    id: 'feather',
+    name: 'Feather',
+    type: 'material',
+    miningSpeedMultiplier: 1.0,
+    maxStack: 64,
+    color: '#f8fafc',
+    description: 'Light soft feather dropped by birds.',
+  },
+  leather: {
+    id: 'leather',
+    name: 'Leather',
+    type: 'material',
+    miningSpeedMultiplier: 1.0,
+    maxStack: 64,
+    color: '#9a3412',
+    description: 'Tough animal hide dropped by cows and cattle.',
+  },
+  bone: {
+    id: 'bone',
+    name: 'Bone',
+    type: 'material',
+    miningSpeedMultiplier: 1.0,
+    maxStack: 64,
+    color: '#e2e8f0',
+    description: 'Sturdy white bone dropped by skeletons.',
+  },
+  gunpowder: {
+    id: 'gunpowder',
+    name: 'Gunpowder',
+    type: 'material',
+    miningSpeedMultiplier: 1.0,
+    maxStack: 64,
+    color: '#475569',
+    description: 'Volatile explosive powder dropped by creepers.',
+  },
+  rotten_flesh: {
+    id: 'rotten_flesh',
+    name: 'Rotten Flesh',
+    type: 'food',
+    miningSpeedMultiplier: 1.0,
+    foodValue: 2,
+    maxStack: 64,
+    color: '#854d0e',
+    description: 'Decayed mob flesh dropped by zombies.',
+  },
+  ender_pearl: {
+    id: 'ender_pearl',
+    name: 'Ender Pearl',
+    type: 'material',
+    miningSpeedMultiplier: 1.0,
+    maxStack: 16,
+    color: '#0d9488',
+    description: 'Mystical turquoise sphere dropped by an Enderman.',
+  },
+  wool: {
+    id: 'wool',
+    name: 'White Wool',
+    type: 'block',
+    blockId: BLOCK.DIRT,
+    miningSpeedMultiplier: 1.0,
+    maxStack: 64,
+    color: '#f1f5f9',
+    description: 'Fluffy white wool gathered from sheep.',
+  },
+  raw_porkchop: {
+    id: 'raw_porkchop',
+    name: 'Raw Porkchop',
+    type: 'food',
+    miningSpeedMultiplier: 1.0,
+    foodValue: 3,
+    maxStack: 64,
+    color: '#f472b6',
+    description: 'Fresh raw meat dropped by pigs.',
   },
 
   // Blocks
@@ -398,7 +491,7 @@ export const BLOCK_BREAK_RULES: Record<number, BlockBreakRule> = {
     baseHardness: 1.5,
     preferredTool: 'pickaxe',
     requiresTool: false,
-    dropItemId: 'stone',
+    dropItemId: 'cobblestone',
     dropCount: 1,
   },
   [BLOCK.DIRT]: {
@@ -414,7 +507,7 @@ export const BLOCK_BREAK_RULES: Record<number, BlockBreakRule> = {
     baseHardness: 0.6,
     preferredTool: 'shovel',
     requiresTool: false,
-    dropItemId: 'grass_block',
+    dropItemId: 'dirt',
     dropCount: 1,
   },
   [BLOCK.WOOD]: {
@@ -483,7 +576,7 @@ export const BLOCK_BREAK_RULES: Record<number, BlockBreakRule> = {
     baseHardness: 2.0,
     preferredTool: 'pickaxe',
     requiresTool: false,
-    dropItemId: 'coal_ore',
+    dropItemId: 'coal',
     dropCount: 1,
   },
   [BLOCK.IRON_ORE]: {
@@ -507,7 +600,7 @@ export const BLOCK_BREAK_RULES: Record<number, BlockBreakRule> = {
     baseHardness: 3.5,
     preferredTool: 'pickaxe',
     requiresTool: false,
-    dropItemId: 'diamond_ore',
+    dropItemId: 'diamond',
     dropCount: 1,
   },
   [BLOCK.REDSTONE_ORE]: {
@@ -516,6 +609,14 @@ export const BLOCK_BREAK_RULES: Record<number, BlockBreakRule> = {
     preferredTool: 'pickaxe',
     requiresTool: false,
     dropItemId: 'redstone_ore',
+    dropCount: 1,
+  },
+  [BLOCK.CAMPFIRE]: {
+    blockId: BLOCK.CAMPFIRE,
+    baseHardness: 0.5,
+    preferredTool: 'axe',
+    requiresTool: false,
+    dropItemId: 'campfire',
     dropCount: 1,
   },
 };
@@ -936,7 +1037,90 @@ export class DroppedItemManager {
     const colorHex = def ? parseInt(def.color.replace('#', '0x'), 16) : 0x888888;
 
     // Mini 3D Box or tool shape
-    if (def?.type === 'block') {
+    if (item.id === 'torch') {
+      const stick = new THREE.Mesh(
+        new THREE.BoxGeometry(0.06, 0.32, 0.06),
+        new THREE.MeshLambertMaterial({ color: 0x6d4c1b })
+      );
+      stick.position.set(0, 0.1, 0);
+      group.add(stick);
+
+      const flame = new THREE.Mesh(
+        new THREE.BoxGeometry(0.08, 0.09, 0.08),
+        new THREE.MeshLambertMaterial({
+          color: 0xf59e0b,
+          emissive: 0xf59e0b,
+          emissiveIntensity: 0.9,
+        })
+      );
+      flame.position.set(0, 0.26, 0);
+      group.add(flame);
+      group.scale.set(0.85, 0.85, 0.85);
+    } else if (item.id === 'feather') {
+      const quill = new THREE.Mesh(
+        new THREE.BoxGeometry(0.03, 0.3, 0.02),
+        new THREE.MeshLambertMaterial({ color: 0xd1d5db })
+      );
+      const vane = new THREE.Mesh(
+        new THREE.BoxGeometry(0.12, 0.22, 0.02),
+        new THREE.MeshLambertMaterial({ color: 0xf8fafc })
+      );
+      vane.position.set(0.03, 0.04, 0);
+      group.add(quill);
+      group.add(vane);
+      group.rotation.z = Math.PI / 6;
+      group.scale.set(0.9, 0.9, 0.9);
+    } else if (item.id === 'bone') {
+      const shaft = new THREE.Mesh(
+        new THREE.BoxGeometry(0.06, 0.28, 0.06),
+        new THREE.MeshLambertMaterial({ color: 0xe2e8f0 })
+      );
+      const end1 = new THREE.Mesh(
+        new THREE.BoxGeometry(0.12, 0.06, 0.09),
+        new THREE.MeshLambertMaterial({ color: 0xf1f5f9 })
+      );
+      end1.position.set(0, 0.13, 0);
+      const end2 = new THREE.Mesh(
+        new THREE.BoxGeometry(0.12, 0.06, 0.09),
+        new THREE.MeshLambertMaterial({ color: 0xf1f5f9 })
+      );
+      end2.position.set(0, -0.13, 0);
+      group.add(shaft);
+      group.add(end1);
+      group.add(end2);
+      group.rotation.z = Math.PI / 4;
+      group.scale.set(0.85, 0.85, 0.85);
+    } else if (item.id === 'leather') {
+      const hide = new THREE.Mesh(
+        new THREE.BoxGeometry(0.24, 0.2, 0.04),
+        new THREE.MeshLambertMaterial({ color: 0x9a3412 })
+      );
+      group.add(hide);
+      group.scale.set(0.85, 0.85, 0.85);
+    } else if (item.id === 'ender_pearl') {
+      const pearl = new THREE.Mesh(
+        new THREE.SphereGeometry(0.1, 8, 8),
+        new THREE.MeshLambertMaterial({
+          color: 0x0d9488,
+          emissive: 0x115e59,
+          emissiveIntensity: 0.6,
+        })
+      );
+      group.add(pearl);
+    } else if (item.id === 'gunpowder') {
+      const pouch = new THREE.Mesh(
+        new THREE.BoxGeometry(0.18, 0.18, 0.18),
+        new THREE.MeshLambertMaterial({ color: 0x475569 })
+      );
+      group.add(pouch);
+    } else if (item.id === 'rotten_flesh' || item.id === 'raw_porkchop' || item.id === 'cooked_beef') {
+      const meat = new THREE.Mesh(
+        new THREE.BoxGeometry(0.22, 0.14, 0.16),
+        new THREE.MeshLambertMaterial({ color: colorHex })
+      );
+      group.add(meat);
+      group.scale.set(0.85, 0.85, 0.85);
+    } else if (def?.type === 'block') {
       const geo = new THREE.BoxGeometry(0.26, 0.26, 0.26);
       const mat = new THREE.MeshLambertMaterial({
         color: colorHex,

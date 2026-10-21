@@ -7,6 +7,11 @@ import {
   BlockId,
 } from "./types";
 import { getBlockIndex } from "./ChunkMeshGenerator";
+import {
+  adjustTerrainHeightForVillage,
+  applyVillageToChunk,
+  isInsideVillage,
+} from "./VillageGenerator";
 
 // Initialize Simplex noise generators
 const noise2D = createNoise2D();
@@ -62,7 +67,8 @@ export function generateTerrain(
       const rawHeight = Math.floor(
         20 + continental * 14 + hills * 8 + detail * 4,
       );
-      const surfaceY = Math.min(CHUNK_SIZE_Y - 8, Math.max(2, rawHeight));
+      const naturalSurfaceY = Math.min(CHUNK_SIZE_Y - 8, Math.max(2, rawHeight));
+      const surfaceY = adjustTerrainHeightForVillage(gx, gz, naturalSurfaceY);
 
       const maxY = Math.max(surfaceY, SEA_LEVEL);
       for (let y = 0; y <= maxY; y++) {
@@ -146,6 +152,9 @@ export function generateTerrain(
           const rnd = hash2D(treeGx, treeGz);
           if (rnd > 0.022) continue;
 
+          // Don't spawn trees inside the village clearing or houses
+          if (isInsideVillage(treeGx, treeGz)) continue;
+
           // Surface Y calculation for tree base
           const c = noise2D(treeGx * 0.007, treeGz * 0.007);
           const h = noise2D(treeGx * 0.02, treeGz * 0.02) * 0.5;
@@ -216,6 +225,9 @@ export function generateTerrain(
       }
     }
   }
+
+  // Pass 3: Procedural Plains Village structures (Houses, Doors, Well, Paths, Lamps)
+  applyVillageToChunk(data, chunkX, chunkZ);
 
   return data;
 }

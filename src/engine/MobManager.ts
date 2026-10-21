@@ -1,4 +1,6 @@
 import * as THREE from "three";
+import { BLOCK, BLOCK_DEFS } from "./types";
+import { sound } from "./AudioEngine";
 import {
   EntityModelBuilder,
   HumanoidParts,
@@ -19,7 +21,8 @@ export type MobType =
   | "cow"
   | "sheep"
   | "pig"
-  | "bird";
+  | "bird"
+  | "villager";
 
 export interface ActiveMob {
   id: string;
@@ -54,6 +57,7 @@ export class MobManager {
   private sheepMaterial: THREE.MeshLambertMaterial;
   private pigMaterial: THREE.MeshLambertMaterial;
   private birdMaterial: THREE.MeshLambertMaterial;
+  private villagerMaterial: THREE.MeshLambertMaterial;
 
   // Callbacks
   public onPlayerAttackedByMob?: (
@@ -75,6 +79,7 @@ export class MobManager {
     this.sheepMaterial = EntityModelBuilder.createMobMaterial("sheep");
     this.pigMaterial = EntityModelBuilder.createMobMaterial("pig");
     this.birdMaterial = EntityModelBuilder.createMobMaterial("bird");
+    this.villagerMaterial = EntityModelBuilder.createMobMaterial("villager");
   }
 
   public clearAllMobs(): void {
@@ -129,6 +134,13 @@ export class MobManager {
       mob.position.y += 0.35;
       mob.meshGroup.position.copy(mob.position);
 
+      if (mob.type === "villager") {
+        sound.playVillager("hurt");
+        mob.walkSpeed = 0.9;
+        mob.state = "wander";
+        mob.stateTimer = 4.0;
+      }
+
       const isDead = mob.health <= 0;
       if (isDead) {
         this.scene.remove(mob.meshGroup);
@@ -144,17 +156,70 @@ export class MobManager {
     return { hit: false };
   }
 
+  /**
+   * Player interaction (Right-click) with friendly Villagers
+   */
+  public interactWithVillagerAtRay(
+    camera: THREE.PerspectiveCamera,
+  ): { interacted: boolean; message?: string } {
+    const rayOrigin = camera.position;
+    const rayDir = new THREE.Vector3();
+    camera.getWorldDirection(rayDir);
+
+    let closestVillager: ActiveMob | null = null;
+    let closestDist = 3.6;
+
+    this.mobs.forEach((mob) => {
+      if (mob.type !== "villager") return;
+      const mobCenter = mob.position.clone().add(new THREE.Vector3(0, 1.0, 0));
+      const toMob = new THREE.Vector3().subVectors(mobCenter, rayOrigin);
+      const proj = toMob.dot(rayDir);
+
+      if (proj > 0.4 && proj < closestDist) {
+        const perpDist = toMob.clone().addScaledVector(rayDir, -proj).length();
+        if (perpDist < 0.9) {
+          closestDist = proj;
+          closestVillager = mob;
+        }
+      }
+    });
+
+    if (closestVillager) {
+      const v: ActiveMob = closestVillager;
+      v.targetRotationY = Math.atan2(
+        rayOrigin.x - v.position.x,
+        rayOrigin.z - v.position.z,
+      );
+      v.state = "idle";
+      v.stateTimer = 4.0;
+      sound.playVillager("trade");
+
+      if (this.onFriendlyPetGiveFood) {
+        const gifts = ["bread", "wheat", "apple", "emerald"];
+        const gift = gifts[Math.floor(Math.random() * gifts.length)];
+        this.onFriendlyPetGiveFood(
+          v.position.clone().add(new THREE.Vector3(0, 0.5, 0)),
+          gift,
+        );
+      }
+
+      return {
+        interacted: true,
+        message: "Житель: Хрррм! Приветствую в нашей деревне!",
+      };
+    }
+
+    return { interacted: false };
+  }
+
   public spawnMob(type: MobType, position: THREE.Vector3): ActiveMob {
     const id = `mob_${type}_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
     let parts: any;
     let mat: THREE.MeshLambertMaterial;
 
-    if (
-      this.chunkManager &&
-      typeof this.chunkManager.getTopGroundY === "function"
-    ) {
-      const topY = this.chunkManager.getTopGroundY(position.x, position.z);
-      position.y = topY;
+    if (this.chunkManager) {
+      const groundY = this.getGroundYAt(position.x, position.y, position.z);
+      position.y = type === "bird" ? Math.max(groundY + 12, 32) : groundY;
     }
 
     if (type === "zombie") {
@@ -196,7 +261,9 @@ export class MobManager {
     } else if (type === "bird") {
       mat = this.birdMaterial.clone();
       parts = EntityModelBuilder.buildBird(mat);
-      position.y = Math.max(position.y + 12, 32);
+    } else if (type === "villager") {
+      mat = this.villagerMaterial.clone();
+      parts = EntityModelBuilder.buildVillager(mat);
     } else {
       mat = this.pigMaterial.clone();
       parts = EntityModelBuilder.buildQuadruped(mat, "pig");
@@ -205,6 +272,7 @@ export class MobManager {
     parts.group.position.copy(position);
     this.scene.add(parts.group);
 
+    const initialRotation = Math.random() * Math.PI * 2;
     const mob: ActiveMob = {
       id,
       type,
@@ -212,18 +280,24 @@ export class MobManager {
       meshGroup: parts.group,
       position: position.clone(),
       velocity: new THREE.Vector3(0, 0, 0),
-      rotationY: Math.random() * Math.PI * 2,
-      targetRotationY: 0,
+      rotationY: initialRotation,
+      targetRotationY: initialRotation,
       targetPos: null,
       state: "wander",
       stateTimer: 2 + Math.random() * 3,
       fuseTimer: 0,
       health: 20,
       walkCycle: Math.random() * 10,
-      walkSpeed: 0,
+      walkSpeed: type === "bird" ? 0.7 : 0.38,
       material: mat,
       attackCooldown: 0,
     };
+
+    mob.targetPos = this.findWalkableWanderTarget(mob, 8);
+    mob.targetRotationY = Math.atan2(
+      mob.targetPos.x - mob.position.x,
+      mob.targetPos.z - mob.position.z,
+    );
 
     this.mobs.set(id, mob);
     return mob;
@@ -231,6 +305,126 @@ export class MobManager {
 
   public getMobCount(): number {
     return this.mobs.size;
+  }
+
+  /**
+   * Checks if a voxel block is solid for mob navigation and collisions.
+   */
+  public isBlockSolid(blockId: number): boolean {
+    if (
+      blockId === BLOCK.AIR ||
+      blockId === BLOCK.WATER ||
+      blockId === BLOCK.TORCH ||
+      blockId === BLOCK.LAVA
+    ) {
+      return false;
+    }
+    const def = BLOCK_DEFS[blockId];
+    if (def && def.solid === false) {
+      return false;
+    }
+    return true;
+  }
+
+  /**
+   * Resolves ground Y level near the given position (handles slopes, overhangs, and caves).
+   */
+  public getGroundYAt(x: number, yHint: number, z: number): number {
+    if (!this.chunkManager) return Math.floor(yHint);
+
+    const ix = Math.floor(x);
+    const iz = Math.floor(z);
+
+    // If chunkManager has getBlockGlobal, scan locally near mob's current elevation
+    if (typeof this.chunkManager.getBlockGlobal === "function") {
+      const startY = Math.min(63, Math.floor(yHint) + 3);
+      const endY = Math.max(1, Math.floor(yHint) - 8);
+
+      for (let y = startY; y >= endY; y--) {
+        const b = this.chunkManager.getBlockGlobal(ix, y, iz);
+        if (this.isBlockSolid(b)) {
+          const above = this.chunkManager.getBlockGlobal(ix, y + 1, iz);
+          if (!this.isBlockSolid(above)) {
+            return y + 1; // Walkable surface
+          }
+        }
+      }
+    }
+
+    if (typeof this.chunkManager.getTopGroundY === "function") {
+      return this.chunkManager.getTopGroundY(x, z);
+    }
+
+    return yHint;
+  }
+
+  /**
+   * Finds a walkable destination on the terrain within a search radius for wandering mobs.
+   */
+  public findWalkableWanderTarget(
+    mob: ActiveMob,
+    radius: number = 8,
+  ): THREE.Vector3 {
+    let bestTarget: THREE.Vector3 | null = null;
+    let minScore = 999;
+
+    // Probe candidate directions around the mob
+    for (let i = 0; i < 8; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      const dist = 3.5 + Math.random() * (radius - 3.5);
+      const candX = mob.position.x + Math.sin(angle) * dist;
+      const candZ = mob.position.z + Math.cos(angle) * dist;
+      const groundY = this.getGroundYAt(candX, mob.position.y, candZ);
+
+      // Avoid lava or dangerous blocks at destination
+      if (
+        this.chunkManager &&
+        typeof this.chunkManager.getBlockGlobal === "function"
+      ) {
+        const footBlock = this.chunkManager.getBlockGlobal(
+          Math.floor(candX),
+          Math.floor(groundY - 1),
+          Math.floor(candZ),
+        );
+        if (footBlock === BLOCK.LAVA) continue;
+      }
+
+      const heightDiff = Math.abs(groundY - mob.position.y);
+      if (heightDiff <= 2.5 && heightDiff < minScore) {
+        minScore = heightDiff;
+        bestTarget = new THREE.Vector3(candX, groundY, candZ);
+      }
+    }
+
+    if (bestTarget) {
+      return bestTarget;
+    }
+
+    // Fallback: pick a gentle random offset
+    const angle = Math.random() * Math.PI * 2;
+    const dist = 4.0;
+    const fx = mob.position.x + Math.sin(angle) * dist;
+    const fz = mob.position.z + Math.cos(angle) * dist;
+    const fy = this.getGroundYAt(fx, mob.position.y, fz);
+    return new THREE.Vector3(fx, fy, fz);
+  }
+
+  /**
+   * Checks if there is a clear unblocked line of sight between two positions (no solid blocks).
+   */
+  public hasLineOfSight(from: THREE.Vector3, to: THREE.Vector3): boolean {
+    if (!this.chunkManager || typeof this.chunkManager.raycast !== "function") {
+      return true;
+    }
+    const eyeFrom = from.clone().add(new THREE.Vector3(0, 1.4, 0));
+    const eyeTo = to.clone().add(new THREE.Vector3(0, 1.0, 0));
+    const dir = new THREE.Vector3().subVectors(eyeTo, eyeFrom);
+    const dist = dir.length();
+    if (dist < 0.3) return true;
+    dir.normalize();
+    const hit = this.chunkManager.raycast(eyeFrom, dir, dist - 0.2);
+    // If raycast hits a solid block, line of sight is obstructed
+    return !hit;
   }
 
   public update(
@@ -241,44 +435,124 @@ export class MobManager {
     const toRemove: string[] = [];
 
     this.mobs.forEach((mob, id) => {
-      // Calculate distance to player
+      // Calculate 3D and horizontal distance and elevation to player
       const dx = playerPosition.x - mob.position.x;
+      const dy = playerPosition.y - mob.position.y;
       const dz = playerPosition.z - mob.position.z;
-      const distToPlayer = Math.sqrt(dx * dx + dz * dz);
+      const horizontalDist = Math.sqrt(dx * dx + dz * dz);
+      const dist3D = Math.sqrt(dx * dx + dy * dy + dz * dz);
+      const distToPlayer = horizontalDist;
 
       mob.stateTimer -= deltaTime;
       if (mob.attackCooldown > 0) {
         mob.attackCooldown -= deltaTime;
       }
 
-      // Peaceful animals & birds wander on their own independently of player
+      // Distant mobs (> 50 blocks) pause AI to preserve 60 FPS and avoid probing unloaded chunks
+      if (distToPlayer > 50) {
+        return;
+      }
+
+      // Peaceful animals, villagers & birds wander on their own independently of player
       if (
         mob.type === "cow" ||
         mob.type === "sheep" ||
         mob.type === "pig" ||
-        mob.type === "bird"
+        mob.type === "villager"
       ) {
-        if (mob.stateTimer <= 0) {
-          if (mob.state === "idle") {
-            mob.state = "wander";
-            mob.targetRotationY = Math.random() * Math.PI * 2;
-            mob.walkSpeed = mob.type === "bird" ? 0.7 : 0.4;
-            mob.stateTimer = 4 + Math.random() * 5;
-          } else {
+        // If Villager is close to player (< 3.5 blocks), look at player and greet!
+        if (mob.type === "villager" && distToPlayer < 3.5) {
+          mob.targetRotationY = Math.atan2(dx, dz);
+          mob.walkSpeed = 0;
+          mob.state = "idle";
+          if (Math.random() < 0.005) {
+            sound.playVillager("idle");
+          }
+        } else if (mob.state === "wander") {
+          const distToTarget = mob.targetPos
+            ? Math.hypot(
+                mob.targetPos.x - mob.position.x,
+                mob.targetPos.z - mob.position.z,
+              )
+            : 0;
+
+          if (!mob.targetPos || distToTarget < 1.0 || mob.stateTimer <= 0) {
             mob.state = "idle";
             mob.walkSpeed = 0;
-            mob.stateTimer = 2 + Math.random() * 3;
+            mob.targetPos = null;
+            mob.stateTimer = 1.8 + Math.random() * 3.0;
+          } else {
+            mob.targetRotationY = Math.atan2(
+              mob.targetPos.x - mob.position.x,
+              mob.targetPos.z - mob.position.z,
+            );
+            mob.walkSpeed = 0.38;
+          }
+        } else {
+          // Idle state: look around periodically, then wander
+          mob.walkSpeed = 0;
+          if (Math.random() < 0.02) {
+            mob.targetRotationY += (Math.random() - 0.5) * 1.5;
+          }
+          if (mob.stateTimer <= 0) {
+            mob.state = "wander";
+            mob.targetPos = this.findWalkableWanderTarget(mob, 8);
+            mob.targetRotationY = Math.atan2(
+              mob.targetPos.x - mob.position.x,
+              mob.targetPos.z - mob.position.z,
+            );
+            mob.walkSpeed = 0.38;
+            mob.stateTimer = 4.0 + Math.random() * 4.5;
+          }
+        }
+      } else if (mob.type === "bird") {
+        if (mob.state === "wander") {
+          const distToTarget = mob.targetPos
+            ? Math.hypot(
+                mob.targetPos.x - mob.position.x,
+                mob.targetPos.z - mob.position.z,
+              )
+            : 0;
+          if (!mob.targetPos || distToTarget < 2.0 || mob.stateTimer <= 0) {
+            mob.state = "idle";
+            mob.walkSpeed = 0.25;
+            mob.targetPos = null;
+            mob.stateTimer = 2.0 + Math.random() * 3.0;
+          } else {
+            mob.targetRotationY = Math.atan2(
+              mob.targetPos.x - mob.position.x,
+              mob.targetPos.z - mob.position.z,
+            );
+            mob.walkSpeed = 0.75;
+          }
+        } else {
+          if (Math.random() < 0.03) {
+            mob.targetRotationY += (Math.random() - 0.5) * 0.8;
+          }
+          if (mob.stateTimer <= 0) {
+            mob.state = "wander";
+            const flyDist = 15 + Math.random() * 20;
+            const flyAngle = Math.random() * Math.PI * 2;
+            mob.targetPos = new THREE.Vector3(
+              mob.position.x + Math.sin(flyAngle) * flyDist,
+              mob.position.y,
+              mob.position.z + Math.cos(flyAngle) * flyDist,
+            );
+            mob.targetRotationY = flyAngle;
+            mob.walkSpeed = 0.75;
+            mob.stateTimer = 6.0 + Math.random() * 6.0;
           }
         }
       } else if (mob.type === "steve") {
-        if (distToPlayer < 3.0) {
+        if (dist3D < 3.0 && Math.abs(dy) <= 2.0) {
           // Close to player: stop walking and stand politely facing player
           mob.walkSpeed = 0;
           mob.targetRotationY = Math.atan2(dx, dz);
           mob.state = "idle";
+          mob.targetPos = null;
 
           // Give food gift if cooldown ready (ONLY Steve, count: 1)
-          if (distToPlayer < 2.8 && mob.attackCooldown <= 0) {
+          if (dist3D < 2.8 && mob.attackCooldown <= 0) {
             mob.attackCooldown = 30.0; // 30s gift cooldown
             if (this.onFriendlyPetGiveFood) {
               const foods = ["apple", "bread", "cooked_beef"];
@@ -287,18 +561,48 @@ export class MobManager {
               this.onFriendlyPetGiveFood(mob.position.clone(), randomFood);
             }
           }
-        } else if (distToPlayer < 16) {
+        } else if (dist3D < 16 && Math.abs(dy) <= 6.0) {
           // Follow player at friendly distance
           mob.state = "chase";
           mob.targetRotationY = Math.atan2(dx, dz);
-          mob.walkSpeed = 0.6;
+          mob.walkSpeed = 0.58;
+          mob.targetPos = null;
         } else {
-          // Wander peacefully
-          if (mob.stateTimer <= 0) {
-            mob.state = mob.state === "idle" ? "wander" : "idle";
-            mob.targetRotationY = Math.random() * Math.PI * 2;
-            mob.walkSpeed = mob.state === "wander" ? 0.4 : 0;
-            mob.stateTimer = 3 + Math.random() * 3;
+          // Wander nearby terrain naturally
+          if (mob.state === "wander") {
+            const distToTarget = mob.targetPos
+              ? Math.hypot(
+                  mob.targetPos.x - mob.position.x,
+                  mob.targetPos.z - mob.position.z,
+                )
+              : 0;
+            if (!mob.targetPos || distToTarget < 1.0 || mob.stateTimer <= 0) {
+              mob.state = "idle";
+              mob.walkSpeed = 0;
+              mob.targetPos = null;
+              mob.stateTimer = 2.0 + Math.random() * 3.0;
+            } else {
+              mob.targetRotationY = Math.atan2(
+                mob.targetPos.x - mob.position.x,
+                mob.targetPos.z - mob.position.z,
+              );
+              mob.walkSpeed = 0.42;
+            }
+          } else {
+            mob.walkSpeed = 0;
+            if (Math.random() < 0.02) {
+              mob.targetRotationY += (Math.random() - 0.5) * 1.5;
+            }
+            if (mob.stateTimer <= 0) {
+              mob.state = "wander";
+              mob.targetPos = this.findWalkableWanderTarget(mob, 7);
+              mob.targetRotationY = Math.atan2(
+                mob.targetPos.x - mob.position.x,
+                mob.targetPos.z - mob.position.z,
+              );
+              mob.walkSpeed = 0.42;
+              mob.stateTimer = 3.5 + Math.random() * 4.0;
+            }
           }
         }
       } else if (
@@ -307,30 +611,66 @@ export class MobManager {
         mob.type === "knight" ||
         mob.type === "engineer"
       ) {
-        if (distToPlayer < 3.0) {
+        if (dist3D < 3.0 && Math.abs(dy) <= 2.0) {
           mob.walkSpeed = 0;
           mob.targetRotationY = Math.atan2(dx, dz);
           mob.state = "idle";
-        } else if (distToPlayer < 16) {
+          mob.targetPos = null;
+        } else if (dist3D < 16 && Math.abs(dy) <= 6.0) {
           mob.state = "chase";
           mob.targetRotationY = Math.atan2(dx, dz);
-          mob.walkSpeed = 0.6;
+          mob.walkSpeed = 0.58;
+          mob.targetPos = null;
         } else {
-          if (mob.stateTimer <= 0) {
-            mob.state = mob.state === "idle" ? "wander" : "idle";
-            mob.targetRotationY = Math.random() * Math.PI * 2;
-            mob.walkSpeed = mob.state === "wander" ? 0.4 : 0;
-            mob.stateTimer = 3 + Math.random() * 3;
+          if (mob.state === "wander") {
+            const distToTarget = mob.targetPos
+              ? Math.hypot(
+                  mob.targetPos.x - mob.position.x,
+                  mob.targetPos.z - mob.position.z,
+                )
+              : 0;
+            if (!mob.targetPos || distToTarget < 1.0 || mob.stateTimer <= 0) {
+              mob.state = "idle";
+              mob.walkSpeed = 0;
+              mob.targetPos = null;
+              mob.stateTimer = 2.0 + Math.random() * 3.0;
+            } else {
+              mob.targetRotationY = Math.atan2(
+                mob.targetPos.x - mob.position.x,
+                mob.targetPos.z - mob.position.z,
+              );
+              mob.walkSpeed = 0.42;
+            }
+          } else {
+            mob.walkSpeed = 0;
+            if (Math.random() < 0.02) {
+              mob.targetRotationY += (Math.random() - 0.5) * 1.5;
+            }
+            if (mob.stateTimer <= 0) {
+              mob.state = "wander";
+              mob.targetPos = this.findWalkableWanderTarget(mob, 7);
+              mob.targetRotationY = Math.atan2(
+                mob.targetPos.x - mob.position.x,
+                mob.targetPos.z - mob.position.z,
+              );
+              mob.walkSpeed = 0.42;
+              mob.stateTimer = 3.5 + Math.random() * 4.0;
+            }
           }
         }
-      } else if (distToPlayer < 16) {
-        // Hostile monsters (Zombie, Creeper, Skeleton, Enderman) chase aggressively
+      } else if (
+        dist3D < 16 &&
+        Math.abs(dy) <= 6.0 &&
+        this.hasLineOfSight(mob.position, playerPosition)
+      ) {
+        // Hostile monsters chase aggressively only if they have direct line of sight and player is reachable
         mob.state = "chase";
+        mob.targetPos = null;
         mob.targetRotationY = Math.atan2(dx, dz);
 
         if (mob.type === "skeleton") {
-          // Skeleton keeps 8-12 block archery distance and shoots arrows
-          mob.walkSpeed = distToPlayer < 7 ? 0 : 0.7;
+          // Skeleton keeps 7-12 block archery distance and shoots arrows ONLY with line of sight
+          mob.walkSpeed = dist3D < 7 ? 0 : 0.7;
           if (mob.attackCooldown <= 0) {
             mob.attackCooldown = 2.0; // 2s arrow shot
             const kx = Math.sin(mob.rotationY) * 2.5;
@@ -340,9 +680,9 @@ export class MobManager {
             }
           }
         } else if (mob.type === "enderman") {
-          // Enderman moves fast and teleports on hit
+          // Enderman moves fast and attacks within 1.8 blocks in 3D
           mob.walkSpeed = 1.3;
-          if (distToPlayer < 1.8 && mob.attackCooldown <= 0) {
+          if (dist3D < 1.8 && Math.abs(dy) <= 1.8 && mob.attackCooldown <= 0) {
             mob.attackCooldown = 1.0;
             const kx = Math.sin(mob.rotationY) * 4.5;
             const kz = Math.cos(mob.rotationY) * 4.5;
@@ -358,10 +698,11 @@ export class MobManager {
           mob.walkSpeed = 1.0;
         }
 
-        // Zombie Melee Attack (< 1.4 blocks)
+        // Zombie Melee Attack (< 1.6 blocks in 3D, and same elevation)
         if (
           mob.type === "zombie" &&
-          distToPlayer < 1.4 &&
+          dist3D < 1.6 &&
+          Math.abs(dy) <= 1.4 &&
           mob.attackCooldown <= 0
         ) {
           mob.attackCooldown = 1.0; // 1s attack cooldown
@@ -372,9 +713,9 @@ export class MobManager {
           }
         }
 
-        // Creeper close fuse logic
+        // Creeper close fuse logic (< 3.2 blocks in 3D, and same elevation)
         if (mob.type === "creeper") {
-          if (distToPlayer < 3.2) {
+          if (dist3D < 3.2 && Math.abs(dy) <= 2.0) {
             mob.state = "fusing";
             mob.walkSpeed = 0.2;
             mob.fuseTimer += deltaTime;
@@ -389,15 +730,15 @@ export class MobManager {
               if (onExplosion) {
                 onExplosion(mob.position.clone(), 3.5);
               }
-              if (distToPlayer < 5.0 && this.onPlayerAttackedByMob) {
+              if (dist3D < 5.0 && this.onPlayerAttackedByMob) {
                 const explosionDamage = Math.max(
                   2,
-                  Math.floor(18 * (1.0 - distToPlayer / 5.0)),
+                  Math.floor(18 * (1.0 - dist3D / 5.0)),
                 );
                 const dirX =
-                  (playerPosition.x - mob.position.x) / (distToPlayer || 1);
+                  (playerPosition.x - mob.position.x) / (dist3D || 1);
                 const dirZ =
-                  (playerPosition.z - mob.position.z) / (distToPlayer || 1);
+                  (playerPosition.z - mob.position.z) / (dist3D || 1);
                 this.onPlayerAttackedByMob(explosionDamage, {
                   x: dirX * 6.5,
                   y: 4.8,
@@ -412,17 +753,47 @@ export class MobManager {
           }
         }
       } else {
-        // Wandering / Idle
-        if (mob.stateTimer <= 0) {
-          if (mob.state === "idle") {
-            mob.state = "wander";
-            mob.targetRotationY = Math.random() * Math.PI * 2;
-            mob.walkSpeed = 0.5;
-            mob.stateTimer = 3 + Math.random() * 4;
-          } else {
+        // Active wandering and patrolling when player is underground, behind walls, or far away
+        if (mob.type === "creeper" && mob.fuseTimer > 0) {
+          mob.fuseTimer = Math.max(0, mob.fuseTimer - deltaTime);
+          mob.material.color.setHex(0xffffff);
+        }
+
+        if (mob.state === "wander") {
+          const distToTarget = mob.targetPos
+            ? Math.hypot(
+                mob.targetPos.x - mob.position.x,
+                mob.targetPos.z - mob.position.z,
+              )
+            : 0;
+
+          if (!mob.targetPos || distToTarget < 1.0 || mob.stateTimer <= 0) {
             mob.state = "idle";
             mob.walkSpeed = 0;
-            mob.stateTimer = 2 + Math.random() * 2;
+            mob.targetPos = null;
+            mob.stateTimer = 1.8 + Math.random() * 2.5;
+          } else {
+            mob.targetRotationY = Math.atan2(
+              mob.targetPos.x - mob.position.x,
+              mob.targetPos.z - mob.position.z,
+            );
+            mob.walkSpeed = 0.42;
+          }
+        } else {
+          // Idle state for monster: look around periodically, then wander
+          mob.walkSpeed = 0;
+          if (Math.random() < 0.025) {
+            mob.targetRotationY += (Math.random() - 0.5) * 1.8;
+          }
+          if (mob.stateTimer <= 0) {
+            mob.state = "wander";
+            mob.targetPos = this.findWalkableWanderTarget(mob, 8);
+            mob.targetRotationY = Math.atan2(
+              mob.targetPos.x - mob.position.x,
+              mob.targetPos.z - mob.position.z,
+            );
+            mob.walkSpeed = 0.42;
+            mob.stateTimer = 3.5 + Math.random() * 4.5;
           }
         }
       }
@@ -434,40 +805,116 @@ export class MobManager {
       mob.rotationY += angleDiff * Math.min(1, deltaTime * 6.0);
       mob.meshGroup.rotation.y = mob.rotationY;
 
-      // Move forward if walking
+      // Move forward if walking with obstacle avoidance & step-assist
       if (mob.walkSpeed > 0.05) {
-        const speed = mob.walkSpeed * (mob.type === "creeper" ? 2.5 : 2.2);
-        mob.position.x += Math.sin(mob.rotationY) * speed * deltaTime;
-        mob.position.z += Math.cos(mob.rotationY) * speed * deltaTime;
-        mob.walkCycle += deltaTime * 8.0 * mob.walkSpeed;
+        const speedMultiplier =
+          mob.type === "creeper"
+            ? 2.4
+            : mob.type === "enderman" && mob.state === "chase"
+              ? 3.2
+              : 2.2;
+        const currentSpeed = mob.walkSpeed * speedMultiplier;
+        const stepDist = currentSpeed * deltaTime;
+
+        if (mob.type === "bird") {
+          mob.position.x += Math.sin(mob.rotationY) * stepDist;
+          mob.position.z += Math.cos(mob.rotationY) * stepDist;
+          mob.walkCycle += deltaTime * 8.0 * mob.walkSpeed;
+        } else {
+          // Ground navigation with obstacle detection & step-assist (auto-jump 1 block)
+          const probeDist = 0.6;
+          const aheadX = mob.position.x + Math.sin(mob.rotationY) * probeDist;
+          const aheadZ = mob.position.z + Math.cos(mob.rotationY) * probeDist;
+          const aheadGroundY = this.getGroundYAt(
+            aheadX,
+            mob.position.y,
+            aheadZ,
+          );
+          const heightDiff = aheadGroundY - mob.position.y;
+
+          let isBlocked = false;
+          if (heightDiff > 1.25) {
+            // High wall (2+ blocks high)
+            isBlocked = true;
+          } else if (heightDiff < -3.5 && mob.state !== "chase") {
+            // Steep drop off / cliff when wandering
+            isBlocked = true;
+          }
+
+          if (isBlocked) {
+            // Pathfinding steering: probe left and right angles to find open passage
+            const leftAngle = mob.rotationY + Math.PI * 0.38;
+            const rightAngle = mob.rotationY - Math.PI * 0.38;
+
+            const leftGroundY = this.getGroundYAt(
+              mob.position.x + Math.sin(leftAngle) * probeDist,
+              mob.position.y,
+              mob.position.z + Math.cos(leftAngle) * probeDist,
+            );
+            const rightGroundY = this.getGroundYAt(
+              mob.position.x + Math.sin(rightAngle) * probeDist,
+              mob.position.y,
+              mob.position.z + Math.cos(rightAngle) * probeDist,
+            );
+
+            const leftDiff = Math.abs(leftGroundY - mob.position.y);
+            const rightDiff = Math.abs(rightGroundY - mob.position.y);
+
+            if (leftDiff <= 1.25 && leftDiff <= rightDiff) {
+              mob.targetRotationY = leftAngle;
+            } else if (rightDiff <= 1.25) {
+              mob.targetRotationY = rightAngle;
+            } else {
+              // Dead end: turn around and repath
+              mob.targetRotationY += Math.PI * 0.75;
+              mob.targetPos = null;
+              mob.state = "idle";
+              mob.stateTimer = 1.0;
+            }
+          } else {
+            // Clear or step-able path: advance
+            mob.position.x += Math.sin(mob.rotationY) * stepDist;
+            mob.position.z += Math.cos(mob.rotationY) * stepDist;
+            mob.walkCycle += deltaTime * 8.0 * mob.walkSpeed;
+
+            // Step-assist: smoothly ascend 1-block steps
+            if (heightDiff > 0 && heightDiff <= 1.25) {
+              mob.position.y = Math.min(
+                aheadGroundY,
+                mob.position.y + deltaTime * 8.0,
+              );
+            }
+          }
+        }
       }
 
       // Ground / Flight altitude alignment
-      if (
-        this.chunkManager &&
-        typeof this.chunkManager.getTopGroundY === "function"
-      ) {
-        const topY = this.chunkManager.getTopGroundY(
+      if (mob.type === "bird") {
+        const topY = this.getGroundYAt(
           mob.position.x,
+          mob.position.y,
           mob.position.z,
         );
-        if (mob.type === "bird") {
-          const targetFlyY = topY + 14 + Math.sin(mob.walkCycle * 0.4) * 3;
+        const targetFlyY = topY + 14 + Math.sin(mob.walkCycle * 0.4) * 3;
+        mob.position.y = THREE.MathUtils.lerp(
+          mob.position.y,
+          targetFlyY,
+          Math.min(1.0, deltaTime * 4.0),
+        );
+      } else {
+        const groundY = this.getGroundYAt(
+          mob.position.x,
+          mob.position.y,
+          mob.position.z,
+        );
+        if (mob.position.y < groundY) {
+          mob.position.y = groundY;
+        } else if (mob.position.y > groundY) {
           mob.position.y = THREE.MathUtils.lerp(
             mob.position.y,
-            targetFlyY,
-            Math.min(1.0, deltaTime * 4.0),
+            groundY,
+            Math.min(1.0, deltaTime * 14.0),
           );
-        } else {
-          if (mob.position.y < topY) {
-            mob.position.y = topY;
-          } else {
-            mob.position.y = THREE.MathUtils.lerp(
-              mob.position.y,
-              topY,
-              Math.min(1.0, deltaTime * 12.0),
-            );
-          }
         }
       }
 

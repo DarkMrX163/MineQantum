@@ -27,6 +27,7 @@ import {
 } from "../engine/WorldEventManager";
 import { BlockParticleManager } from "../engine/BlockParticleManager";
 import { FirstPersonHands } from "../engine/FirstPersonHands";
+import { VILLAGER_SPAWN_POINTS } from "../engine/VillageGenerator";
 
 interface VoxelCanvasProps {
   selectedBlock: BlockId;
@@ -66,7 +67,8 @@ interface VoxelCanvasProps {
       | "enderman"
       | "cow"
       | "sheep"
-      | "pig";
+      | "pig"
+      | "villager";
     timestamp: number;
   } | null;
   clearMobsTrigger?: number;
@@ -230,6 +232,10 @@ export const VoxelCanvas: React.FC<VoxelCanvasProps> = ({
     // 7.5 First-Person Hands & Held Item Renderer
     const hands = new FirstPersonHands(camera);
 
+    // Dynamic handheld torch light
+    const handheldTorchLight = new THREE.PointLight(0xffaa44, 0, 14);
+    camera.add(handheldTorchLight);
+
     // Initialize NetworkManager for WebSockets, position throttling & remote player lerping
     const netManager = new NetworkManager(scene, chunkManager);
     controller.netManager = netManager;
@@ -364,6 +370,19 @@ export const VoxelCanvas: React.FC<VoxelCanvasProps> = ({
       return false;
     };
 
+    // Player right-click interaction with friendly Villagers
+    controller.onInteractMobRequest = () => {
+      const res = mobManager.interactWithVillagerAtRay(camera);
+      if (res.interacted) {
+        handSwingTimer = 0.25;
+        if (res.message && onEventNotification) {
+          onEventNotification(res.message);
+        }
+        return true;
+      }
+      return false;
+    };
+
     // Mob attacking player (Zombie melee & Creeper explosion)
     mobManager.onPlayerAttackedByMob = (damage, knockback) => {
       sound.playHurt();
@@ -383,18 +402,30 @@ export const VoxelCanvas: React.FC<VoxelCanvasProps> = ({
       if (onActiveEventUpdate) onActiveEventUpdate(null);
     };
 
-    // Mob loot drop on death (No free food drops - player gathers food themselves)
+    // Mob loot drop on death (Spawns 3D collectible item entities in the world)
     mobManager.onMobKilled = (type, pos) => {
       eventManager.notifyMobKilled();
-      if (type === "sheep") {
-        dropManager.spawnDrop(
-          { id: "cobblestone", count: 2, maxStack: 64 },
-          pos,
-        );
+      const dropPos = pos.clone().add(new THREE.Vector3(0, 0.5, 0));
+
+      if (type === "bird") {
+        dropManager.spawnDrop({ id: "feather", count: 1, maxStack: 64 }, dropPos);
+      } else if (type === "cow") {
+        dropManager.spawnDrop({ id: "leather", count: 1, maxStack: 64 }, dropPos);
+      } else if (type === "skeleton") {
+        dropManager.spawnDrop({ id: "bone", count: 1, maxStack: 64 }, dropPos);
+      } else if (type === "zombie") {
+        dropManager.spawnDrop({ id: "rotten_flesh", count: 1, maxStack: 64 }, dropPos);
       } else if (type === "creeper") {
-        dropManager.spawnDrop({ id: "coal", count: 2, maxStack: 64 }, pos);
+        dropManager.spawnDrop({ id: "gunpowder", count: 1, maxStack: 64 }, dropPos);
       } else if (type === "enderman") {
-        dropManager.spawnDrop({ id: "diamond", count: 1, maxStack: 64 }, pos);
+        dropManager.spawnDrop({ id: "ender_pearl", count: 1, maxStack: 16 }, dropPos);
+      } else if (type === "sheep") {
+        dropManager.spawnDrop({ id: "wool", count: 1, maxStack: 64 }, dropPos);
+      } else if (type === "pig") {
+        dropManager.spawnDrop({ id: "raw_porkchop", count: 1, maxStack: 64 }, dropPos);
+      } else if (type === "villager") {
+        const loot = Math.random() < 0.6 ? "bread" : "emerald";
+        dropManager.spawnDrop({ id: loot, count: 1, maxStack: 64 }, dropPos);
       }
     };
 
@@ -428,6 +459,11 @@ export const VoxelCanvas: React.FC<VoxelCanvasProps> = ({
     for (const [type, sx, sz] of animalSpawns) {
       const ty = chunkManager.getTopGroundY(sx, sz);
       mobManager.spawnMob(type, new THREE.Vector3(sx, ty, sz));
+    }
+
+    // Spawn authentic Villagers in the Plains Village
+    for (const pt of VILLAGER_SPAWN_POINTS) {
+      mobManager.spawnMob("villager", new THREE.Vector3(pt.x, pt.y, pt.z));
     }
 
     if (onMobCountUpdate) {
@@ -670,6 +706,13 @@ export const VoxelCanvas: React.FC<VoxelCanvasProps> = ({
       const isSwinging = handSwingTimer > 0;
       hands.animate(elapsedTime, isMoving, isMining, isSwinging);
 
+      // Handheld dynamic torch illumination (flickering warm glow in dark)
+      if (heldItem?.id === "torch" || effectiveBlockToPlace === BLOCK.TORCH) {
+        handheldTorchLight.intensity = 1.9 + Math.sin(elapsedTime * 9) * 0.15;
+      } else {
+        handheldTorchLight.intensity = 0;
+      }
+
       // Interpolate remote players smooth movement
       netManager.update(delta);
 
@@ -764,6 +807,7 @@ export const VoxelCanvas: React.FC<VoxelCanvasProps> = ({
       renderer.domElement.removeEventListener("contextmenu", handleContextMenu);
       window.removeEventListener("contextmenu", handleContextMenu);
       hands.dispose(camera);
+      camera.remove(handheldTorchLight);
       if (mountRef.current) {
         mountRef.current.innerHTML = "";
       }

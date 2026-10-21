@@ -136,6 +136,7 @@ export interface ChunkLightingAccess {
   getLightGlobal(gx: number, gy: number, gz: number): number;
   setLightGlobal(gx: number, gy: number, gz: number, val: number): void;
   markChunkDirtyAt(gx: number, gz: number): void;
+  isChunkLoaded(gx: number, gz: number): boolean;
 }
 
 /**
@@ -242,7 +243,7 @@ export class LightManager {
     ];
 
     let head = 0;
-    while (head < queue.length) {
+    while (head < queue.length && head < 4096) {
       const [x, y, z, light] = queue[head++];
 
       for (const [dx, dy, dz] of DIRS) {
@@ -251,6 +252,7 @@ export class LightManager {
         const nz = z + dz;
 
         if (ny < 0 || ny >= CHUNK_SIZE_Y) continue;
+        if (!this.access.isChunkLoaded(nx, nz)) continue;
 
         const neighborBlock = this.access.getBlockGlobal(nx, ny, nz);
 
@@ -274,7 +276,7 @@ export class LightManager {
             );
             this.access.markChunkDirtyAt(nx, nz);
 
-            if (nextLight > 1) {
+            if (nextLight > 1 && queue.length < 4096) {
               queue.push([nx, ny, nz, nextLight]);
             }
           }
@@ -321,7 +323,7 @@ export class LightManager {
 
     let rHead = 0;
     // 1. BFS to lower/clear light levels affected by this light source
-    while (rHead < removalQueue.length) {
+    while (rHead < removalQueue.length && rHead < 4096) {
       const [x, y, z, lightVal] = removalQueue[rHead++];
 
       for (const [dx, dy, dz] of DIRS) {
@@ -330,6 +332,7 @@ export class LightManager {
         const nz = z + dz;
 
         if (ny < 0 || ny >= CHUNK_SIZE_Y) continue;
+        if (!this.access.isChunkLoaded(nx, nz)) continue;
 
         const neighborPacked = this.access.getLightGlobal(nx, ny, nz);
         const neighborBlockLight = unpackBlock(neighborPacked);
@@ -339,10 +342,14 @@ export class LightManager {
           // Darken this block
           this.access.setLightGlobal(nx, ny, nz, packLight(neighborSky, 0));
           this.access.markChunkDirtyAt(nx, nz);
-          removalQueue.push([nx, ny, nz, neighborBlockLight]);
+          if (removalQueue.length < 4096) {
+            removalQueue.push([nx, ny, nz, neighborBlockLight]);
+          }
         } else if (neighborBlockLight >= lightVal) {
           // This neighbor is illuminated by another light source! Queue for re-propagation
-          recheckQueue.push([nx, ny, nz, neighborBlockLight]);
+          if (recheckQueue.length < 4096) {
+            recheckQueue.push([nx, ny, nz, neighborBlockLight]);
+          }
         }
       }
     }

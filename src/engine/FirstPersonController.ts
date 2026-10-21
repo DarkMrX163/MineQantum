@@ -87,6 +87,7 @@ export class FirstPersonController {
   public onAttackMobRequest?: () => boolean;
   public onEatFood?: (item: SlotItem) => void;
   public onOpenCraftingTable?: () => void;
+  public onInteractMobRequest?: () => boolean;
 
   constructor(
     camera: THREE.PerspectiveCamera,
@@ -656,6 +657,11 @@ export class FirstPersonController {
         return; // Hit a mob, don't mine block behind it!
       }
     } else if (button === 2) {
+      // First check if player right-clicks a friendly Villager
+      if (this.onInteractMobRequest && this.onInteractMobRequest()) {
+        return;
+      }
+
       // Check if player is holding food and wants to eat
       if (this.activeHeldItem) {
         const itemDef = ITEM_REGISTRY[this.activeHeldItem.id];
@@ -710,12 +716,53 @@ export class FirstPersonController {
           }
         }
       } else if (button === 2) {
-        // Check if target block is a Crafting Table block
+        // Check if target block is an Oak Door (toggle Open/Closed)
         const targetBlockId = this.chunkManager.getBlockGlobal(
           hit.blockPos.x,
           hit.blockPos.y,
           hit.blockPos.z,
         );
+
+        if (targetBlockId === BLOCK.DOOR || targetBlockId === BLOCK.DOOR_OPEN) {
+          const newBlockId =
+            targetBlockId === BLOCK.DOOR ? BLOCK.DOOR_OPEN : BLOCK.DOOR;
+          const hx = hit.blockPos.x;
+          const hy = hit.blockPos.y;
+          const hz = hit.blockPos.z;
+
+          // Toggle the targeted door block
+          this.chunkManager.setBlockGlobal(hx, hy, hz, newBlockId, this.scene);
+          this.netManager?.sendBlockEdit(hx, hy, hz, newBlockId);
+
+          // Synchronously toggle connected upper or lower door block
+          const aboveBlock = this.chunkManager.getBlockGlobal(hx, hy + 1, hz);
+          if (aboveBlock === BLOCK.DOOR || aboveBlock === BLOCK.DOOR_OPEN) {
+            this.chunkManager.setBlockGlobal(
+              hx,
+              hy + 1,
+              hz,
+              newBlockId,
+              this.scene,
+            );
+            this.netManager?.sendBlockEdit(hx, hy + 1, hz, newBlockId);
+          }
+          const belowBlock = this.chunkManager.getBlockGlobal(hx, hy - 1, hz);
+          if (belowBlock === BLOCK.DOOR || belowBlock === BLOCK.DOOR_OPEN) {
+            this.chunkManager.setBlockGlobal(
+              hx,
+              hy - 1,
+              hz,
+              newBlockId,
+              this.scene,
+            );
+            this.netManager?.sendBlockEdit(hx, hy - 1, hz, newBlockId);
+          }
+
+          sound.playDoor(newBlockId === BLOCK.DOOR_OPEN);
+          return;
+        }
+
+        // Check if target block is a Crafting Table block
         if (
           targetBlockId === BLOCK.CRAFTING_TABLE &&
           this.onOpenCraftingTable

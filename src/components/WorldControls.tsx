@@ -43,7 +43,7 @@ interface WorldControlsProps {
   enableAO?: boolean;
   onToggleAO?: () => void;
   mobCount?: number;
-  onSpawnMob?: (type: 'steve' | 'zombie' | 'creeper' | 'skeleton' | 'enderman' | 'cow' | 'sheep' | 'pig') => void;
+  onSpawnMob?: (type: 'steve' | 'zombie' | 'creeper' | 'skeleton' | 'enderman' | 'cow' | 'sheep' | 'pig' | 'villager') => void;
   onClearMobs?: () => void;
   weather?: 'sunny' | 'rain' | 'thunderstorm' | 'snow';
   onChangeWeather?: (weather: 'sunny' | 'rain' | 'thunderstorm' | 'snow') => void;
@@ -326,6 +326,19 @@ export const WorldControls: React.FC<WorldControlsProps> = ({
                 >
                   🧑 Steve
                 </button>
+                <button
+                  onClick={() => onSpawnMob?.('villager')}
+                  className="px-2 py-1 rounded-lg bg-emerald-950/80 hover:bg-emerald-900 text-emerald-300 border border-emerald-800/60 font-semibold transition cursor-pointer flex items-center gap-1 text-[11px]"
+                  title="Spawn a peaceful Villager"
+                >
+                  🌾 Villager
+                </button>
+                <div
+                  className="px-2 py-0.5 rounded-lg bg-amber-950/60 border border-amber-700/50 text-amber-300 font-mono text-[10px] flex items-center gap-1"
+                  title="Village location in the world"
+                >
+                  🏡 Деревня: (48, 48)
+                </div>
                 {mobCount > 0 && onClearMobs && (
                   <button
                     onClick={onClearMobs}

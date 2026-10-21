@@ -92,11 +92,49 @@ export class FirstPersonHands {
       } else if (heldItem.id === "bread" || heldItem.id === "cooked_beef") {
         itemMat = new THREE.MeshLambertMaterial({ color: 0xb45309 });
       } else if (heldItem.id === "torch") {
-        itemMat = new THREE.MeshLambertMaterial({
+        // Authentic Minecraft handheld torch model
+        const torchGroup = new THREE.Group();
+
+        // Wooden stick
+        const stickGeo = new THREE.BoxGeometry(0.045, 0.3, 0.045);
+        const stickMat = new THREE.MeshLambertMaterial({ color: 0x6d4c1b });
+        const stick = new THREE.Mesh(stickGeo, stickMat);
+        stick.position.set(0, 0.08, 0);
+        torchGroup.add(stick);
+
+        // Charcoal / coal band
+        const coalGeo = new THREE.BoxGeometry(0.048, 0.04, 0.048);
+        const coalMat = new THREE.MeshLambertMaterial({ color: 0x262626 });
+        const coal = new THREE.Mesh(coalGeo, coalMat);
+        coal.position.set(0, 0.22, 0);
+        torchGroup.add(coal);
+
+        // Glowing flame head
+        const flameGeo = new THREE.BoxGeometry(0.054, 0.07, 0.054);
+        const flameMat = new THREE.MeshLambertMaterial({
           color: 0xf59e0b,
           emissive: 0xf59e0b,
-          emissiveIntensity: 0.5,
+          emissiveIntensity: 0.95,
         });
+        const flame = new THREE.Mesh(flameGeo, flameMat);
+        flame.position.set(0, 0.26, 0);
+        torchGroup.add(flame);
+
+        // Bright hot inner core
+        const coreGeo = new THREE.BoxGeometry(0.026, 0.04, 0.026);
+        const coreMat = new THREE.MeshLambertMaterial({
+          color: 0xfffbeb,
+          emissive: 0xffffff,
+          emissiveIntensity: 1.2,
+        });
+        const core = new THREE.Mesh(coreGeo, coreMat);
+        core.position.set(0, 0.27, 0);
+        torchGroup.add(core);
+
+        torchGroup.rotation.x = -0.15;
+        torchGroup.rotation.z = -0.1;
+        this.itemMeshGroup.add(torchGroup);
+        return;
       } else if (heldItem.id === "campfire") {
         itemMat = new THREE.MeshLambertMaterial({
           color: 0xea580c,

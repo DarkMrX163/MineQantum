@@ -36,7 +36,8 @@ export type EntityType =
   | "cow"
   | "sheep"
   | "pig"
-  | "bird";
+  | "bird"
+  | "villager";
 
 export interface HumanoidParts {
   group: THREE.Group;
@@ -52,8 +53,9 @@ export interface HumanoidParts {
   rightArmMesh: THREE.Mesh;
   leftLegMesh: THREE.Mesh;
   rightLegMesh: THREE.Mesh;
-  type: "player" | "zombie" | "skeleton" | "enderman";
+  type: "player" | "zombie" | "skeleton" | "enderman" | "villager";
   bowMesh?: THREE.Mesh;
+  foldedArms?: THREE.Group;
 }
 
 export interface CreeperParts {
@@ -140,40 +142,46 @@ export class EntityModelBuilder {
     const back = uvCoords(u + dz + dx + dz, v + dz, dx, dy);
 
     // Apply to Three.js vertex positions for each face
-    // Face 0 (+X: Right)
-    uvAttr.setXY(0, right.u0, right.v1);
-    uvAttr.setXY(1, right.u0, right.v0);
-    uvAttr.setXY(2, right.u1, right.v1);
-    uvAttr.setXY(3, right.u1, right.v0);
+    // Three.js BoxGeometry vertex order per face (gridX=1, gridY=1):
+    // 0: Top-Left (u0, v1)
+    // 1: Top-Right (u1, v1)
+    // 2: Bottom-Left (u0, v0)
+    // 3: Bottom-Right (u1, v0)
 
-    // Face 1 (-X: Left)
-    uvAttr.setXY(4, left.u0, left.v1);
-    uvAttr.setXY(5, left.u0, left.v0);
-    uvAttr.setXY(6, left.u1, left.v1);
-    uvAttr.setXY(7, left.u1, left.v0);
+    // Face 0 (+X: Mob Left side)
+    uvAttr.setXY(0, left.u0, left.v1);
+    uvAttr.setXY(1, left.u1, left.v1);
+    uvAttr.setXY(2, left.u0, left.v0);
+    uvAttr.setXY(3, left.u1, left.v0);
+
+    // Face 1 (-X: Mob Right side)
+    uvAttr.setXY(4, right.u0, right.v1);
+    uvAttr.setXY(5, right.u1, right.v1);
+    uvAttr.setXY(6, right.u0, right.v0);
+    uvAttr.setXY(7, right.u1, right.v0);
 
     // Face 2 (+Y: Top)
-    uvAttr.setXY(8, top.u0, top.v0);
-    uvAttr.setXY(9, top.u0, top.v1);
-    uvAttr.setXY(10, top.u1, top.v0);
-    uvAttr.setXY(11, top.u1, top.v1);
+    uvAttr.setXY(8, top.u0, top.v1);
+    uvAttr.setXY(9, top.u1, top.v1);
+    uvAttr.setXY(10, top.u0, top.v0);
+    uvAttr.setXY(11, top.u1, top.v0);
 
     // Face 3 (-Y: Bottom)
-    uvAttr.setXY(12, bottom.u0, bottom.v1);
-    uvAttr.setXY(13, bottom.u0, bottom.v0);
-    uvAttr.setXY(14, bottom.u1, bottom.v1);
-    uvAttr.setXY(15, bottom.u1, bottom.v0);
+    uvAttr.setXY(12, bottom.u0, bottom.v0);
+    uvAttr.setXY(13, bottom.u1, bottom.v0);
+    uvAttr.setXY(14, bottom.u0, bottom.v1);
+    uvAttr.setXY(15, bottom.u1, bottom.v1);
 
-    // Face 4 (+Z: Front)
+    // Face 4 (+Z: Front face - Eyes & Face Features)
     uvAttr.setXY(16, front.u0, front.v1);
-    uvAttr.setXY(17, front.u0, front.v0);
-    uvAttr.setXY(18, front.u1, front.v1);
+    uvAttr.setXY(17, front.u1, front.v1);
+    uvAttr.setXY(18, front.u0, front.v0);
     uvAttr.setXY(19, front.u1, front.v0);
 
     // Face 5 (-Z: Back)
     uvAttr.setXY(20, back.u0, back.v1);
-    uvAttr.setXY(21, back.u0, back.v0);
-    uvAttr.setXY(22, back.u1, back.v1);
+    uvAttr.setXY(21, back.u1, back.v1);
+    uvAttr.setXY(22, back.u0, back.v0);
     uvAttr.setXY(23, back.u1, back.v0);
 
     uvAttr.needsUpdate = true;
@@ -369,6 +377,126 @@ export class EntityModelBuilder {
   }
 
   /**
+   * Builds an authentic Minecraft Plains Villager model:
+   * - Taller Head: 8 x 10 x 8 pixels with iconic 3D protruding nose (2 x 4 x 2 pixels)!
+   * - Torso & Robe: 8 x 12 x 4 pixels with brown coat extending over legs.
+   * - Folded Arms: 8 x 4 x 4 box connected across chest.
+   * - Two Walking Legs: 4 x 12 x 4 pixels beneath robe.
+   */
+  public static buildVillager(
+    material: THREE.Material,
+    scale: number = 1 / 16,
+  ): HumanoidParts {
+    const root = new THREE.Group();
+
+    // 1. Torso: 8 x 12 x 4
+    const torsoW = 8 * scale;
+    const torsoH = 12 * scale;
+    const torsoD = 4 * scale;
+    const { pivotGroup: torsoGroup, mesh: torsoMesh } = this.createPivotPart(
+      torsoW,
+      torsoH,
+      torsoD,
+      { x: 0, y: torsoH / 2, z: 0 },
+      material,
+      { u: 16, v: 16, dx: 8, dy: 12, dz: 4 },
+    );
+    torsoGroup.position.set(0, 12 * scale, 0);
+    root.add(torsoGroup);
+
+    // 1.5 Robe Lower Flap / Skirt (attached to torso base)
+    const robeGeo = new THREE.BoxGeometry(8.5 * scale, 6 * scale, 4.5 * scale);
+    this.applyBoxSkinUVs(robeGeo, 16, 20, 8, 6, 4, 64, 64);
+    const robeMesh = new THREE.Mesh(robeGeo, material);
+    robeMesh.position.set(0, 9 * scale, 0);
+    root.add(robeMesh);
+
+    // 2. Head: 8 x 10 x 8 (Villagers have 10-pixel tall head in Minecraft)
+    const headW = 8 * scale;
+    const headH = 10 * scale;
+    const headD = 8 * scale;
+    const { pivotGroup: headGroup, mesh: headMesh } = this.createPivotPart(
+      headW,
+      headH,
+      headD,
+      { x: 0, y: headH / 2, z: 0 },
+      material,
+      { u: 0, v: 0, dx: 8, dy: 10, dz: 8 },
+    );
+    headGroup.position.set(0, 24 * scale, 0);
+
+    // Iconic 3D Villager Nose: 2 x 4 x 2 pixels protruding in front of the face
+    const noseGeo = new THREE.BoxGeometry(2 * scale, 4 * scale, 2 * scale);
+    this.applyBoxSkinUVs(noseGeo, 24, 0, 2, 4, 2, 64, 64);
+    const noseMesh = new THREE.Mesh(noseGeo, material);
+    noseMesh.position.set(0, 3.5 * scale, 5 * scale);
+    headGroup.add(noseMesh);
+
+    root.add(headGroup);
+
+    // 3. Folded Arms: 8 x 4 x 4 pixels resting across front of chest
+    const armsGroup = new THREE.Group();
+    armsGroup.position.set(0, 16 * scale, 2.5 * scale);
+
+    const foldedGeo = new THREE.BoxGeometry(8 * scale, 4 * scale, 4 * scale);
+    this.applyBoxSkinUVs(foldedGeo, 40, 16, 8, 4, 4, 64, 64);
+    const foldedMesh = new THREE.Mesh(foldedGeo, material);
+    armsGroup.add(foldedMesh);
+    root.add(armsGroup);
+
+    // 4. Right Leg: 4 x 12 x 4
+    const legW = 4 * scale;
+    const legH = 12 * scale;
+    const legD = 4 * scale;
+
+    const { pivotGroup: rightLegGroup, mesh: rightLegMesh } =
+      this.createPivotPart(
+        legW,
+        legH,
+        legD,
+        { x: 0, y: -legH / 2, z: 0 },
+        material,
+        { u: 0, v: 16, dx: 4, dy: 12, dz: 4 },
+      );
+    rightLegGroup.position.set(-2 * scale, 12 * scale, 0);
+    root.add(rightLegGroup);
+
+    // 5. Left Leg: 4 x 12 x 4
+    const { pivotGroup: leftLegGroup, mesh: leftLegMesh } =
+      this.createPivotPart(
+        legW,
+        legH,
+        legD,
+        { x: 0, y: -legH / 2, z: 0 },
+        material,
+        { u: 16, v: 48, dx: 4, dy: 12, dz: 4 },
+      );
+    leftLegGroup.position.set(2 * scale, 12 * scale, 0);
+    root.add(leftLegGroup);
+
+    const dummyLeftArm = new THREE.Group();
+    const dummyRightArm = new THREE.Group();
+
+    return {
+      group: root,
+      head: headGroup,
+      torso: torsoGroup,
+      leftArm: dummyLeftArm,
+      rightArm: dummyRightArm,
+      leftLeg: leftLegGroup,
+      rightLeg: rightLegGroup,
+      headMesh,
+      torsoMesh,
+      leftArmMesh: foldedMesh,
+      rightArmMesh: foldedMesh,
+      leftLegMesh,
+      rightLegMesh,
+      foldedArms: armsGroup,
+      type: "villager",
+    };
+  }
+
+  /**
    * Builds a classic Creeper model.
    * Proportions:
    * - Head: 8 x 8 x 8 (pivot at neck y = 18 * scale)
@@ -501,6 +629,12 @@ export class EntityModelBuilder {
       const twitch = Math.sin(time * 3.5) * 0.08 + Math.cos(time * 7.0) * 0.04;
       parts.leftArm.rotation.x = -Math.PI / 2 + twitch;
       parts.rightArm.rotation.x = -Math.PI / 2 - twitch;
+    } else if (parts.type === "villager") {
+      // Folded arms sway gently with walk
+      if (parts.foldedArms) {
+        parts.foldedArms.rotation.x = Math.sin(time * 8.0) * 0.08 * walkSpeed;
+      }
+      parts.head.rotation.x = Math.sin(time * 8.0) * 0.04 * walkSpeed;
     }
 
     // Gentle torso and head bounce
@@ -686,20 +820,20 @@ export class EntityModelBuilder {
       fillPixelRect(0, 0, 32, 16, 205, 150, 115, 12);
       // Steve Brown Hair on Top/Sides
       fillPixelRect(8, 0, 8, 8, 70, 45, 25, 8); // Top of head
-      fillPixelRect(0, 8, 32, 3, 70, 45, 25, 8); // Hair fringe
-      // Face details at Front face: x=8, y=8, w=8, h=8
-      // Eyes at (10, 10) and (13, 10)
+      fillPixelRect(0, 8, 32, 2, 70, 45, 25, 8); // Hair fringe
+      // Face details at Front face: x=8..15, y=8..15
+      // Eyes at x=9..10 and x=13..14
       ctx.fillStyle = "#ffffff";
-      ctx.fillRect(10, 10, 2, 1);
+      ctx.fillRect(9, 10, 2, 1);
       ctx.fillRect(13, 10, 2, 1);
       ctx.fillStyle = "#2c4391"; // Blue iris
-      ctx.fillRect(11, 10, 1, 1);
+      ctx.fillRect(10, 10, 1, 1);
       ctx.fillRect(13, 10, 1, 1);
-      // Nose / mouth
-      ctx.fillStyle = "#8f4f34";
-      ctx.fillRect(11, 12, 2, 1); // mouth/beard
+      // Nose / mouth (centered at x=11..12)
       ctx.fillStyle = "#b87556";
       ctx.fillRect(11, 11, 2, 1); // nose
+      ctx.fillStyle = "#8f4f34";
+      ctx.fillRect(10, 12, 4, 1); // mouth/beard
 
       // Torso: Cyan Shirt (0, 160, 175)
       fillPixelRect(16, 16, 24, 16, 25, 165, 175, 12);
@@ -722,10 +856,10 @@ export class EntityModelBuilder {
       fillPixelRect(0, 0, 32, 16, 85, 140, 65, 14);
       // Dark green/mossy hair
       fillPixelRect(8, 0, 8, 8, 40, 75, 30, 8);
-      fillPixelRect(0, 8, 32, 3, 40, 75, 30, 8);
-      // Zombie hollow black eyes at (10, 10) and (13, 10)
+      fillPixelRect(0, 8, 32, 2, 40, 75, 30, 8);
+      // Zombie hollow black eyes at (9, 10) and (13, 10)
       ctx.fillStyle = "#0a1005";
-      ctx.fillRect(10, 10, 2, 1);
+      ctx.fillRect(9, 10, 2, 1);
       ctx.fillRect(13, 10, 2, 1);
       // Nose
       ctx.fillStyle = "#487d33";
@@ -747,7 +881,7 @@ export class EntityModelBuilder {
       // Creeper: Mottled pixelated camouflage green texture everywhere!
       fillPixelRect(0, 0, 64, 64, 75, 165, 60, 25);
 
-      // Iconic Creeper Face on Front of Head: x=8, y=8, w=8, h=8
+      // Iconic Creeper Face on Front of Head: x=8..15, y=8..15
       ctx.fillStyle = "#000000";
       ctx.fillRect(9, 10, 2, 2);
       ctx.fillRect(13, 10, 2, 2);
@@ -759,13 +893,13 @@ export class EntityModelBuilder {
     } else if (type === "skeleton") {
       // Skeleton: Bone white texture with dark eye sockets
       fillPixelRect(0, 0, 64, 64, 215, 218, 222, 12);
-      // Dark eye sockets & nasal cavity
+      // Dark eye sockets & nasal cavity on front face
       ctx.fillStyle = "#262626";
-      ctx.fillRect(9, 9, 3, 3);
-      ctx.fillRect(14, 9, 3, 3);
-      ctx.fillRect(12, 12, 2, 2);
+      ctx.fillRect(9, 9, 2, 2);
+      ctx.fillRect(13, 9, 2, 2);
+      ctx.fillRect(11, 11, 2, 1);
       // Teeth line
-      ctx.fillRect(10, 14, 6, 1);
+      ctx.fillRect(10, 13, 4, 1);
       // Ribcage on torso
       ctx.fillRect(20, 18, 8, 1);
       ctx.fillRect(20, 20, 8, 1);
@@ -774,61 +908,78 @@ export class EntityModelBuilder {
     } else if (type === "enderman") {
       // Enderman: Pitch dark violet/charcoal texture with glowing purple eyes
       fillPixelRect(0, 0, 64, 64, 16, 14, 22, 8);
-      // Glowing Magenta/Purple eyes: x=8, y=8, w=8, h=8
+      // Glowing Magenta/Purple eyes: x=8..15, y=8..15
       ctx.fillStyle = "#c084fc"; // Purple glow
-      ctx.fillRect(8, 10, 4, 1);
-      ctx.fillRect(14, 10, 4, 1);
+      ctx.fillRect(8, 10, 3, 1);
+      ctx.fillRect(13, 10, 3, 1);
       ctx.fillStyle = "#e9d5ff"; // Bright white/pink core
-      ctx.fillRect(9, 10, 2, 1);
-      ctx.fillRect(15, 10, 2, 1);
+      ctx.fillRect(9, 10, 1, 1);
+      ctx.fillRect(14, 10, 1, 1);
     } else if (type === "cow") {
       // Cow: Dark brown with white spots
       fillPixelRect(0, 0, 64, 64, 90, 65, 45, 15);
       // White patches
       fillPixelRect(16, 16, 12, 10, 240, 240, 240, 5);
       fillPixelRect(32, 20, 10, 8, 240, 240, 240, 5);
-      fillPixelRect(0, 8, 8, 6, 240, 240, 240, 5);
-      // Eyes & Snout
-      ctx.fillStyle = "#000000";
-      ctx.fillRect(9, 10, 2, 1);
+      // Front face eyes & snout (x=8..15, y=8..15)
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(8, 10, 2, 1);
       ctx.fillRect(14, 10, 2, 1);
+      ctx.fillStyle = "#000000";
+      ctx.fillRect(9, 10, 1, 1);
+      ctx.fillRect(14, 10, 1, 1);
       ctx.fillStyle = "#f43f5e"; // Pink snout
-      ctx.fillRect(10, 12, 5, 2);
+      ctx.fillRect(10, 12, 4, 2);
+      ctx.fillStyle = "#000000";
+      ctx.fillRect(10, 13, 1, 1);
+      ctx.fillRect(13, 13, 1, 1);
     } else if (type === "sheep") {
       // Sheep: Cream white fluffy wool
       fillPixelRect(0, 0, 64, 64, 235, 235, 230, 10);
-      // Pink face
-      fillPixelRect(0, 8, 16, 8, 240, 180, 170, 8);
+      // Pink face squarely centered on front face (x=8..15, y=8..15)
+      fillPixelRect(8, 8, 8, 8, 240, 180, 170, 8);
       ctx.fillStyle = "#000000";
-      ctx.fillRect(3, 11, 2, 1);
-      ctx.fillRect(10, 11, 2, 1);
+      ctx.fillRect(9, 11, 2, 1);
+      ctx.fillRect(13, 11, 2, 1);
     } else if (type === "pig") {
       // Pig: Pink skin
       fillPixelRect(0, 0, 64, 64, 245, 165, 165, 12);
-      // Snout
-      fillPixelRect(10, 12, 6, 3, 220, 120, 130, 8);
+      // Snout centered on front face (x=10..13, y=12..14)
+      fillPixelRect(10, 12, 4, 3, 220, 120, 130, 8);
       ctx.fillStyle = "#000000";
       ctx.fillRect(11, 13, 1, 1);
-      ctx.fillRect(14, 13, 1, 1);
-      // Eyes
-      ctx.fillRect(8, 10, 2, 1);
-      ctx.fillRect(15, 10, 2, 1);
+      ctx.fillRect(12, 13, 1, 1);
+      // Eyes squarely on front face (x=8..15)
       ctx.fillStyle = "#ffffff";
-      ctx.fillRect(7, 10, 1, 1);
+      ctx.fillRect(8, 10, 2, 1);
+      ctx.fillRect(14, 10, 2, 1);
+      ctx.fillStyle = "#000000";
+      ctx.fillRect(9, 10, 1, 1);
       ctx.fillRect(14, 10, 1, 1);
     } else if (type === "alex") {
       // Alex: Orange hair, green tunic, beige trousers
       fillPixelRect(0, 0, 32, 16, 215, 160, 125, 10);
       fillPixelRect(8, 0, 8, 8, 210, 110, 30, 8); // Orange hair
+      fillPixelRect(8, 8, 8, 2, 210, 110, 30, 8); // Fringe
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(9, 10, 2, 1);
+      ctx.fillRect(13, 10, 2, 1);
+      ctx.fillStyle = "#15803d"; // Green iris
+      ctx.fillRect(10, 10, 1, 1);
+      ctx.fillRect(13, 10, 1, 1);
       fillPixelRect(16, 16, 24, 16, 45, 155, 85, 10); // Green tunic
       fillPixelRect(40, 16, 16, 16, 215, 160, 125, 10);
       fillPixelRect(0, 16, 16, 16, 130, 110, 85, 10); // Brown pants
     } else if (type === "miner") {
       // Miner: Yellow hard hat with lamp, grey work shirt, utility belt
       fillPixelRect(0, 0, 32, 16, 195, 140, 105, 10);
-      fillPixelRect(6, 0, 12, 5, 235, 195, 45, 6); // Hard hat
+      fillPixelRect(8, 0, 8, 8, 235, 195, 45, 6); // Hard hat
+      fillPixelRect(8, 8, 8, 2, 235, 195, 45, 6); // Hard hat rim
       ctx.fillStyle = "#ffffff";
-      ctx.fillRect(11, 1, 2, 2); // Lamp glow
+      ctx.fillRect(11, 8, 2, 2); // Center Lamp glow
+      ctx.fillStyle = "#0284c7"; // Eyes
+      ctx.fillRect(9, 11, 2, 1);
+      ctx.fillRect(13, 11, 2, 1);
       fillPixelRect(16, 16, 24, 16, 110, 115, 125, 12); // Grey shirt
       fillPixelRect(40, 16, 16, 16, 195, 140, 105, 10);
       fillPixelRect(0, 16, 16, 16, 50, 60, 75, 10); // Dark pants
@@ -837,7 +988,7 @@ export class EntityModelBuilder {
       fillPixelRect(0, 0, 32, 16, 150, 160, 175, 10);
       fillPixelRect(8, 0, 8, 8, 110, 120, 135, 8); // Steel helmet
       ctx.fillStyle = "#1a1a1a";
-      ctx.fillRect(10, 10, 4, 1); // Visor slit
+      ctx.fillRect(10, 10, 4, 1); // Visor slit (centered at x=10..13)
       fillPixelRect(16, 16, 24, 16, 130, 140, 155, 12); // Armor plate
       fillPixelRect(40, 16, 16, 16, 110, 120, 135, 10); // Armored sleeves
       fillPixelRect(0, 16, 16, 16, 70, 80, 95, 10); // Steel greaves
@@ -845,13 +996,54 @@ export class EntityModelBuilder {
       // Engineer: Goggles, orange jumpsuit, tool pouch
       fillPixelRect(0, 0, 32, 16, 210, 150, 120, 10);
       ctx.fillStyle = "#222222";
-      ctx.fillRect(9, 9, 6, 2); // Goggles band
+      ctx.fillRect(8, 9, 8, 2); // Goggles band across front face
       ctx.fillStyle = "#67e8f9"; // Goggle lenses
-      ctx.fillRect(10, 9, 2, 2);
+      ctx.fillRect(9, 9, 2, 2);
       ctx.fillRect(13, 9, 2, 2);
       fillPixelRect(16, 16, 24, 16, 225, 115, 35, 12); // Orange jumpsuit
       fillPixelRect(40, 16, 16, 16, 210, 150, 120, 10);
       fillPixelRect(0, 16, 16, 16, 180, 90, 20, 10); // Brown pants
+    } else if (type === "villager") {
+      // Classic Minecraft Plains Villager
+      // Head base (Skin tone: 215, 160, 125)
+      fillPixelRect(0, 0, 32, 16, 215, 160, 125, 8);
+      // Villager Unibrow: dark brown connected bar across brows (x: 8..15, y: 8)
+      ctx.fillStyle = "#4a2a10";
+      ctx.fillRect(8, 8, 8, 1);
+      // Villager Eyes: Emerald Green iris (#10b981) + white sclera
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(9, 9, 2, 2);
+      ctx.fillRect(13, 9, 2, 2);
+      ctx.fillStyle = "#10b981"; // Emerald green
+      ctx.fillRect(9, 9, 1, 2);
+      ctx.fillRect(14, 9, 1, 2);
+      // Nose shading on face (x: 11..12, y: 10..13)
+      ctx.fillStyle = "#b57c54";
+      ctx.fillRect(11, 10, 2, 4);
+      // Villager Mouth slit
+      ctx.fillStyle = "#633519";
+      ctx.fillRect(11, 14, 2, 1);
+
+      // 3D Nose texture at (24, 0, 8, 8)
+      fillPixelRect(24, 0, 8, 8, 205, 150, 115, 6);
+      ctx.fillStyle = "#9c603a";
+      ctx.fillRect(25, 4, 2, 2); // Shaded tip
+
+      // Torso / Robe (Classic Plains Farmer Brown: 135, 85, 45)
+      fillPixelRect(16, 16, 24, 16, 135, 85, 45, 10);
+      // Green emerald belt / sash across waist
+      ctx.fillStyle = "#059669";
+      ctx.fillRect(20, 26, 8, 2);
+      ctx.fillStyle = "#34d399";
+      ctx.fillRect(23, 26, 2, 2); // Emerald buckle
+
+      // Folded Arms / Sleeves (x: 40..56, y: 16..32)
+      fillPixelRect(40, 16, 16, 16, 130, 80, 40, 10);
+      // Hands tucked in sleeves (skin tone in center)
+      fillPixelRect(44, 20, 4, 3, 215, 160, 125, 6);
+
+      // Lower Robe / Legs (Darker Brown: 110, 68, 35)
+      fillPixelRect(0, 16, 16, 16, 110, 68, 35, 8);
     }
 
     return canvas;

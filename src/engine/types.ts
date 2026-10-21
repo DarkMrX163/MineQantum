@@ -29,6 +29,9 @@ export const BLOCK = {
   DIAMOND_ORE: 17,
   REDSTONE_ORE: 18,
   CAMPFIRE: 19,
+  DOOR: 20,
+  DOOR_OPEN: 21,
+  PATH: 22,
 } as const;
 
 export type BlockId = (typeof BLOCK)[keyof typeof BLOCK];
@@ -201,6 +204,27 @@ export const BLOCK_DEFS: Record<number, BlockInfo> = {
     lightEmission: 14,
     lightDamping: 0,
     tiles: { top: 12, bottom: 2, sides: 6 },
+  },
+  [BLOCK.DOOR]: {
+    id: 20,
+    name: "Oak Door",
+    transparent: true,
+    solid: true,
+    tiles: { top: 12, bottom: 12, sides: 21 },
+  },
+  [BLOCK.DOOR_OPEN]: {
+    id: 21,
+    name: "Open Oak Door",
+    transparent: true,
+    solid: false,
+    tiles: { top: 12, bottom: 12, sides: 22 },
+  },
+  [BLOCK.PATH]: {
+    id: 22,
+    name: "Village Path",
+    transparent: false,
+    solid: true,
+    tiles: { top: 23, bottom: 2, sides: 2 },
   },
 };
 

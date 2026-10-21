@@ -190,6 +190,99 @@ export const ItemIcon: React.FC<ItemIconProps> = ({ itemId, className = 'w-8 h-8
         </svg>
       );
 
+    case 'feather':
+      return (
+        <svg viewBox="0 0 32 32" className={`${className} drop-shadow-sm`}>
+          <line x1="8" y1="24" x2="24" y2="8" stroke="#94a3b8" strokeWidth="1.5" strokeLinecap="round" />
+          <path
+            d="M 12 18 C 10 14, 15 10, 24 8 C 22 17, 18 22, 14 20 Z"
+            fill="#f8fafc"
+            stroke="#cbd5e1"
+            strokeWidth="1"
+          />
+          <path d="M 14 16 L 22 10" stroke="#cbd5e1" strokeWidth="0.8" />
+        </svg>
+      );
+
+    case 'leather':
+      return (
+        <svg viewBox="0 0 32 32" className={`${className} drop-shadow-sm`}>
+          <path
+            d="M 10 8 C 13 9, 19 9, 22 8 C 24 12, 23 20, 21 24 C 18 23, 14 23, 11 24 C 9 20, 8 12, 10 8 Z"
+            fill="#9a3412"
+            stroke="#7c2d12"
+            strokeWidth="1.2"
+          />
+          <path d="M 13 12 C 16 13, 16 19, 19 20" stroke="#c2410c" strokeWidth="1" strokeLinecap="round" />
+        </svg>
+      );
+
+    case 'bone':
+      return (
+        <svg viewBox="0 0 32 32" className={`${className} drop-shadow-sm`}>
+          <line x1="10" y1="22" x2="22" y2="10" stroke="#e2e8f0" strokeWidth="3.5" strokeLinecap="round" />
+          <circle cx="8" cy="21" r="2.2" fill="#f1f5f9" stroke="#cbd5e1" strokeWidth="0.8" />
+          <circle cx="11" cy="24" r="2.2" fill="#f1f5f9" stroke="#cbd5e1" strokeWidth="0.8" />
+          <circle cx="21" cy="8" r="2.2" fill="#f1f5f9" stroke="#cbd5e1" strokeWidth="0.8" />
+          <circle cx="24" cy="11" r="2.2" fill="#f1f5f9" stroke="#cbd5e1" strokeWidth="0.8" />
+        </svg>
+      );
+
+    case 'gunpowder':
+      return (
+        <svg viewBox="0 0 32 32" className={className}>
+          <polygon points="10,24 22,24 25,18 20,13 12,13 7,18" fill="#475569" stroke="#334155" strokeWidth="1" />
+          <circle cx="16" cy="18" r="4" fill="#64748b" />
+          <circle cx="14" cy="17" r="1.5" fill="#94a3b8" />
+        </svg>
+      );
+
+    case 'rotten_flesh':
+      return (
+        <svg viewBox="0 0 32 32" className={`${className} drop-shadow-sm`}>
+          <path
+            d="M 9 18 C 7 13, 11 10, 16 10 C 22 10, 25 15, 23 21 C 20 25, 12 24, 9 18 Z"
+            fill="#854d0e"
+            stroke="#58310c"
+            strokeWidth="1.2"
+          />
+          <circle cx="13" cy="14" r="2" fill="#4d7c0f" />
+          <circle cx="18" cy="18" r="1.5" fill="#3f6212" />
+        </svg>
+      );
+
+    case 'ender_pearl':
+      return (
+        <svg viewBox="0 0 32 32" className={`${className} drop-shadow-md`}>
+          <circle cx="16" cy="16" r="9" fill="#0d9488" stroke="#115e59" strokeWidth="1.2" />
+          <circle cx="16" cy="16" r="6" fill="#14b8a6" />
+          <circle cx="14" cy="14" r="2.5" fill="#99f6e4" />
+        </svg>
+      );
+
+    case 'wool':
+      return (
+        <svg viewBox="0 0 32 32" className={className}>
+          <polygon points="16,6 26,11 16,16 6,11" fill="#f8fafc" stroke="#e2e8f0" strokeWidth="1" />
+          <polygon points="6,11 16,16 16,26 6,21" fill="#e2e8f0" stroke="#cbd5e1" strokeWidth="1" />
+          <polygon points="16,16 26,11 26,21 16,26" fill="#cbd5e1" stroke="#94a3b8" strokeWidth="1" />
+        </svg>
+      );
+
+    case 'raw_porkchop':
+      return (
+        <svg viewBox="0 0 32 32" className={`${className} drop-shadow-sm`}>
+          <path
+            d="M 9 18 C 7 13, 11 9, 17 9 C 23 9, 26 14, 24 21 C 21 25, 12 24, 9 18 Z"
+            fill="#f472b6"
+            stroke="#db2777"
+            strokeWidth="1.2"
+          />
+          <circle cx="13" cy="14" r="2" fill="#fbcfe8" />
+          <line x1="16" y1="13" x2="20" y2="18" stroke="#fdf2f8" strokeWidth="1.5" strokeLinecap="round" />
+        </svg>
+      );
+
     default: {
       // General Isometric Block representation
       const color = itemDef.color || '#64748b';

@@ -260,6 +260,112 @@ class AudioEngine {
       osc.stop(t + 0.06);
     }
   }
+
+  public playDoor(isOpen: boolean): void {
+    if (this.isMuted) return;
+    this.init();
+    if (!this.ctx) return;
+
+    const now = this.ctx.currentTime;
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+
+    if (isOpen) {
+      // Door open: wooden creak and latch release
+      osc.type = "sawtooth";
+      osc.frequency.setValueAtTime(320, now);
+      osc.frequency.linearRampToValueAtTime(180, now + 0.12);
+
+      gain.gain.setValueAtTime(0.24, now);
+      gain.gain.exponentialRampToValueAtTime(0.01, now + 0.14);
+
+      osc.connect(gain);
+      gain.connect(this.ctx.destination);
+      osc.start(now);
+      osc.stop(now + 0.14);
+    } else {
+      // Door close: solid wooden thud & snap
+      osc.type = "triangle";
+      osc.frequency.setValueAtTime(160, now);
+      osc.frequency.exponentialRampToValueAtTime(45, now + 0.15);
+
+      gain.gain.setValueAtTime(0.35, now);
+      gain.gain.exponentialRampToValueAtTime(0.01, now + 0.15);
+
+      osc.connect(gain);
+      gain.connect(this.ctx.destination);
+      osc.start(now);
+      osc.stop(now + 0.15);
+    }
+  }
+
+  public playVillager(action: "idle" | "hurt" | "trade" = "idle"): void {
+    if (this.isMuted) return;
+    this.init();
+    if (!this.ctx) return;
+
+    const now = this.ctx.currentTime;
+    const osc = this.ctx.createOscillator();
+    const filter = this.ctx.createBiquadFilter();
+    const gain = this.ctx.createGain();
+
+    // Nasal bandpass filter characteristic of villager voice
+    filter.type = "bandpass";
+    filter.Q.setValueAtTime(4.0, now);
+
+    if (action === "hurt") {
+      // High startled "Huuuh!"
+      osc.type = "sawtooth";
+      osc.frequency.setValueAtTime(260, now);
+      osc.frequency.linearRampToValueAtTime(340, now + 0.08);
+      osc.frequency.exponentialRampToValueAtTime(190, now + 0.28);
+      filter.frequency.setValueAtTime(700, now);
+
+      gain.gain.setValueAtTime(0.28, now);
+      gain.gain.exponentialRampToValueAtTime(0.01, now + 0.28);
+
+      osc.connect(filter);
+      filter.connect(gain);
+      gain.connect(this.ctx.destination);
+
+      osc.start(now);
+      osc.stop(now + 0.28);
+    } else if (action === "trade") {
+      // Cheerful "Hrr-hmm!"
+      osc.type = "triangle";
+      osc.frequency.setValueAtTime(190, now);
+      osc.frequency.linearRampToValueAtTime(240, now + 0.14);
+      osc.frequency.linearRampToValueAtTime(280, now + 0.32);
+      filter.frequency.setValueAtTime(550, now);
+
+      gain.gain.setValueAtTime(0.25, now);
+      gain.gain.exponentialRampToValueAtTime(0.01, now + 0.35);
+
+      osc.connect(filter);
+      filter.connect(gain);
+      gain.connect(this.ctx.destination);
+
+      osc.start(now);
+      osc.stop(now + 0.35);
+    } else {
+      // Classic deep nasal "Hrrrrm"
+      osc.type = "triangle";
+      osc.frequency.setValueAtTime(215, now);
+      osc.frequency.linearRampToValueAtTime(195, now + 0.2);
+      osc.frequency.exponentialRampToValueAtTime(160, now + 0.42);
+      filter.frequency.setValueAtTime(480, now);
+
+      gain.gain.setValueAtTime(0.28, now);
+      gain.gain.exponentialRampToValueAtTime(0.01, now + 0.42);
+
+      osc.connect(filter);
+      filter.connect(gain);
+      gain.connect(this.ctx.destination);
+
+      osc.start(now);
+      osc.stop(now + 0.42);
+    }
+  }
 }
 
 export const sound = new AudioEngine();

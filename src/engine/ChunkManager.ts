@@ -25,6 +25,7 @@ export class Chunk {
   public lightMap: Uint8Array; // 16x16x64 bytes: (skyLight << 4) | blockLight
   public mesh: THREE.Mesh | null = null;
   public isDirty: boolean = true;
+  public hasGeneratedMesh: boolean = false;
   public renderedFaces: number = 0;
   public naiveFaces: number = 0;
 
@@ -129,7 +130,14 @@ export class ChunkManager {
       getLightGlobal: (gx, gy, gz) => this.getLightGlobal(gx, gy, gz),
       setLightGlobal: (gx, gy, gz, val) => this.setLightGlobal(gx, gy, gz, val),
       markChunkDirtyAt: (gx, gz) => this.markChunkDirtyAt(gx, gz),
+      isChunkLoaded: (gx, gz) => this.isChunkLoaded(gx, gz),
     });
+  }
+
+  public isChunkLoaded(gx: number, gz: number): boolean {
+    const cx = Math.floor(gx / CHUNK_SIZE_X);
+    const cz = Math.floor(gz / CHUNK_SIZE_Z);
+    return this.chunks.has(this.getChunkKey(cx, cz));
   }
 
   public getChunkKey(cx: number, cz: number): string {
@@ -154,6 +162,9 @@ export class ChunkManager {
     let chunk = this.chunks.get(key);
     if (!chunk) {
       chunk = new Chunk(cx, cz);
+      // Immediately register in map before generation/lighting to prevent re-entrant recursion
+      this.chunks.set(key, chunk);
+
       chunk.data = generateTerrain(cx, cz, {
         baseHeight: this.baseHeight,
         heightAmplitude: this.terrainHeight,
@@ -168,8 +179,6 @@ export class ChunkManager {
         cx,
         cz,
       );
-
-      this.chunks.set(key, chunk);
     }
     return chunk;
   }
@@ -239,7 +248,8 @@ export class ChunkManager {
 
     const cx = Math.floor(gx / CHUNK_SIZE_X);
     const cz = Math.floor(gz / CHUNK_SIZE_Z);
-    const chunk = this.getOrCreateChunk(cx, cz);
+    const chunk = this.chunks.get(this.getChunkKey(cx, cz));
+    if (!chunk) return;
 
     const lx = ((gx % CHUNK_SIZE_X) + CHUNK_SIZE_X) % CHUNK_SIZE_X;
     const lz = ((gz % CHUNK_SIZE_Z) + CHUNK_SIZE_Z) % CHUNK_SIZE_Z;
@@ -369,20 +379,34 @@ export class ChunkManager {
     }
   }
 
+  private lastPlayerChunkX: number | null = null;
+  private lastPlayerChunkZ: number | null = null;
+  private lastRenderDistance: number | null = null;
+  private lastNaiveMode: boolean | null = null;
+
   /**
-   * Rebuilds meshes for all dirty chunks with lighting and AO
+   * Rebuilds meshes for dirty chunks with lighting and AO.
+   * Limits rebuilds per frame (default 4) to ensure a stable 60 FPS without stutter.
    */
   public rebuildDirtyMeshes(
     scene: THREE.Scene,
     naiveMode: boolean = false,
+    maxRebuildsPerCall: number = 4,
   ): void {
     const boundGetBlockGlobal = (gx: number, gy: number, gz: number) =>
       this.getBlockGlobal(gx, gy, gz);
     const boundGetLightGlobal = (gx: number, gy: number, gz: number) =>
       this.getLightGlobal(gx, gy, gz);
 
-    this.chunks.forEach((chunk) => {
-      if (!chunk.isDirty && chunk.mesh) return;
+    let rebuildsDone = 0;
+
+    for (const chunk of this.chunks.values()) {
+      if (!chunk.isDirty && chunk.hasGeneratedMesh) continue;
+
+      if (rebuildsDone >= maxRebuildsPerCall) {
+        // Leave remaining chunks for next frame to maintain smooth 60 FPS
+        break;
+      }
 
       // Dispose existing geometry
       if (chunk.mesh) {
@@ -419,8 +443,10 @@ export class ChunkManager {
         chunk.mesh = mesh;
       }
 
+      chunk.hasGeneratedMesh = true;
       chunk.isDirty = false;
-    });
+      rebuildsDone++;
+    }
   }
 
   /**
@@ -432,7 +458,7 @@ export class ChunkManager {
       c.isDirty = true;
     });
     if (scene) {
-      this.rebuildDirtyMeshes(scene);
+      this.rebuildDirtyMeshes(scene, false, 999);
     }
   }
 
@@ -445,12 +471,14 @@ export class ChunkManager {
       c.isDirty = true;
     });
     if (scene) {
-      this.rebuildDirtyMeshes(scene);
+      this.rebuildDirtyMeshes(scene, false, 999);
     }
   }
 
   /**
-   * Dynamically loads/unloads chunks around player position
+   * Dynamically loads/unloads chunks around player position.
+   * Only recomputes chunk set when the player crosses chunk boundaries,
+   * with hysteresis buffering to prevent mesh thrashing at chunk borders.
    */
   public updateWorldAroundPlayer(
     playerX: number,
@@ -462,35 +490,72 @@ export class ChunkManager {
     const playerChunkX = Math.floor(playerX / CHUNK_SIZE_X);
     const playerChunkZ = Math.floor(playerZ / CHUNK_SIZE_Z);
 
-    const activeKeys = new Set<string>();
+    const chunkChanged =
+      playerChunkX !== this.lastPlayerChunkX ||
+      playerChunkZ !== this.lastPlayerChunkZ ||
+      renderDistance !== this.lastRenderDistance ||
+      naiveMode !== this.lastNaiveMode;
 
-    for (let dx = -renderDistance; dx <= renderDistance; dx++) {
-      for (let dz = -renderDistance; dz <= renderDistance; dz++) {
-        // Circle distance check for smooth perimeter loading
-        if (dx * dx + dz * dz > (renderDistance + 0.5) * (renderDistance + 0.5))
-          continue;
+    if (chunkChanged) {
+      this.lastPlayerChunkX = playerChunkX;
+      this.lastPlayerChunkZ = playerChunkZ;
+      this.lastRenderDistance = renderDistance;
+      this.lastNaiveMode = naiveMode;
 
-        const cx = playerChunkX + dx;
-        const cz = playerChunkZ + dz;
-        const key = this.getChunkKey(cx, cz);
-        activeKeys.add(key);
+      const activeKeys = new Set<string>();
+      const keepKeys = new Set<string>();
 
-        this.getOrCreateChunk(cx, cz);
+      for (let dx = -renderDistance; dx <= renderDistance; dx++) {
+        for (let dz = -renderDistance; dz <= renderDistance; dz++) {
+          if (
+            dx * dx + dz * dz >
+            (renderDistance + 0.5) * (renderDistance + 0.5)
+          ) {
+            continue;
+          }
+
+          const cx = playerChunkX + dx;
+          const cz = playerChunkZ + dz;
+          const key = this.getChunkKey(cx, cz);
+          activeKeys.add(key);
+
+          this.getOrCreateChunk(cx, cz);
+        }
       }
+
+      // Hysteresis unload distance: retain chunks within renderDistance + 1.25
+      const unloadDistSq =
+        (renderDistance + 1.25) * (renderDistance + 1.25);
+
+      for (
+        let dx = -renderDistance - 1;
+        dx <= renderDistance + 1;
+        dx++
+      ) {
+        for (
+          let dz = -renderDistance - 1;
+          dz <= renderDistance + 1;
+          dz++
+        ) {
+          if (dx * dx + dz * dz <= unloadDistSq) {
+            keepKeys.add(this.getChunkKey(playerChunkX + dx, playerChunkZ + dz));
+          }
+        }
+      }
+
+      // Unload chunks outside hysteresis distance
+      this.chunks.forEach((chunk, key) => {
+        if (!keepKeys.has(key)) {
+          if (chunk.mesh) {
+            scene.remove(chunk.mesh);
+            chunk.mesh.geometry.dispose();
+          }
+          this.chunks.delete(key);
+        }
+      });
     }
 
-    // Unload chunks outside render distance
-    this.chunks.forEach((chunk, key) => {
-      if (!activeKeys.has(key)) {
-        if (chunk.mesh) {
-          scene.remove(chunk.mesh);
-          chunk.mesh.geometry.dispose();
-        }
-        this.chunks.delete(key);
-      }
-    });
-
-    this.rebuildDirtyMeshes(scene, naiveMode);
+    this.rebuildDirtyMeshes(scene, naiveMode, 4);
   }
 
   /**
