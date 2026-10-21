@@ -33,6 +33,8 @@ export class WorldEventManager {
   private treasureMesh: THREE.Group | null = null;
   private treasureSparkle: THREE.Points | null = null;
   private beaconBeam: THREE.Mesh | null = null;
+  private spawnedPyramidBlocks: { x: number; y: number; z: number; origType: number }[] = [];
+  private nextEventTimer: number = 0;
 
   public onEventCompleted?: (rewardMsg: string) => void;
   public onEventStarted?: (title: string) => void;
@@ -52,6 +54,7 @@ export class WorldEventManager {
     playerPos?: THREE.Vector3,
   ): ActiveWorldEvent {
     this.clearCurrentEvent();
+    this.nextEventTimer = 0;
 
     const selectedType: EventType =
       type && type !== "none"
@@ -95,15 +98,30 @@ export class WorldEventManager {
       const tz = Math.floor(pos.z + Math.cos(angle) * dist);
       const ty = this.chunkManager.getTopGroundY(tx, tz);
 
-      // Build 3D Sandstone Pyramid Shrine into the world voxels
+      // Build 3D Sandstone Pyramid Shrine into the world voxels & record original blocks
+      this.spawnedPyramidBlocks = [];
+
+      // Base 5x5 brick/sandstone platform
       for (let dx = -2; dx <= 2; dx++) {
         for (let dz = -2; dz <= 2; dz++) {
-          this.chunkManager.setBlockGlobal(tx + dx, ty, tz + dz, 8, this.scene); // Brick base
+          const bx = tx + dx;
+          const by = ty;
+          const bz = tz + dz;
+          const orig = this.chunkManager.getBlockGlobal(bx, by, bz);
+          this.spawnedPyramidBlocks.push({ x: bx, y: by, z: bz, origType: orig });
+          this.chunkManager.setBlockGlobal(bx, by, bz, 8, this.scene); // Brick base
         }
       }
+
+      // Mid 3x3 sandstone tier
       for (let dx = -1; dx <= 1; dx++) {
         for (let dz = -1; dz <= 1; dz++) {
-          this.chunkManager.setBlockGlobal(tx + dx, ty + 1, tz + dz, 6, this.scene); // Sand mid
+          const bx = tx + dx;
+          const by = ty + 1;
+          const bz = tz + dz;
+          const orig = this.chunkManager.getBlockGlobal(bx, by, bz);
+          this.spawnedPyramidBlocks.push({ x: bx, y: by, z: bz, origType: orig });
+          this.chunkManager.setBlockGlobal(bx, by, bz, 6, this.scene); // Sand mid
         }
       }
 
@@ -293,7 +311,23 @@ export class WorldEventManager {
   }
 
   public update(dt: number, playerPos: THREE.Vector3): void {
-    if (!this.currentEvent || this.currentEvent.isCompleted) return;
+    if (!this.currentEvent) {
+      this.nextEventTimer += dt;
+      if (this.nextEventTimer >= 15) {
+        this.nextEventTimer = 0;
+        this.startEvent(undefined, playerPos);
+      }
+      return;
+    }
+
+    if (this.currentEvent.isCompleted) {
+      this.nextEventTimer += dt;
+      if (this.nextEventTimer >= 15) {
+        this.nextEventTimer = 0;
+        this.startEvent(undefined, playerPos);
+      }
+      return;
+    }
 
     this.currentEvent.durationLeft -= dt;
 
@@ -363,9 +397,16 @@ export class WorldEventManager {
           ],
           playerPos
         );
+      } else if (this.currentEvent.type === "ancient_pyramid_search") {
+        sound.playBlockBreak();
+        const msg = `⏳ Время Древней Пирамиды истекло! Древние руины погрузились обратно в пески. Следующий ивент скоро начнется...`;
+        this.currentEvent.isCompleted = true;
+        this.currentEvent.winnerMessage = msg;
+        if (this.onEventCompleted) this.onEventCompleted(msg);
+        this.clearChest();
       } else {
         sound.playBlockBreak();
-        const msg = `⏳ Ивент закончился! Время истекло.`;
+        const msg = `⏳ Ивент закончился! Время истекло. Следующий ивент скоро начнется...`;
         this.currentEvent.isCompleted = true;
         this.currentEvent.winnerMessage = msg;
         if (this.onEventCompleted) this.onEventCompleted(msg);
@@ -394,6 +435,15 @@ export class WorldEventManager {
     this.clearChest();
   }
 
+  private clearPyramid(): void {
+    if (this.spawnedPyramidBlocks.length > 0) {
+      for (const b of this.spawnedPyramidBlocks) {
+        this.chunkManager.setBlockGlobal(b.x, b.y, b.z, b.origType, this.scene);
+      }
+      this.spawnedPyramidBlocks = [];
+    }
+  }
+
   private clearChest(): void {
     if (this.treasureMesh) {
       this.scene.remove(this.treasureMesh);
@@ -403,10 +453,12 @@ export class WorldEventManager {
       this.scene.remove(this.treasureSparkle);
       this.treasureSparkle = null;
     }
+    this.clearPyramid();
   }
 
   public clearCurrentEvent(): void {
     this.clearChest();
+    this.clearPyramid();
     this.currentEvent = null;
   }
 }

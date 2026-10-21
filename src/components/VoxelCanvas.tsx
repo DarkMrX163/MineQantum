@@ -764,7 +764,8 @@ export const VoxelCanvas: React.FC<VoxelCanvasProps> = ({
       // Update controller physics
       controller.update(delta);
 
-      // Update First-Person Hands & Held Item
+      // Update First-Person Hands & Held Item (visible only in 1st person mode)
+      hands.setVisible(controller.cameraMode === "first");
       const heldDef = heldItem ? ITEM_REGISTRY[heldItem.id] : null;
       const effectiveBlockToPlace: BlockId =
         heldDef?.type === "block" && heldDef.blockId !== undefined
@@ -775,7 +776,7 @@ export const VoxelCanvas: React.FC<VoxelCanvasProps> = ({
 
       hands.updateHeldItem(heldItem, effectiveBlockToPlace);
       const isMoving =
-        controller.velocity.x !== 0 || controller.velocity.z !== 0;
+        Math.hypot(controller.velocity.x, controller.velocity.z) > 0.2;
       const isMining = controller.isLMBDown;
       handSwingTimer = Math.max(0, handSwingTimer - delta);
       const isSwinging = handSwingTimer > 0;
