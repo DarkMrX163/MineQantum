@@ -9,6 +9,7 @@ interface SurvivalHUDProps {
   maxHealth?: number;
   hunger: number; // 0 to 20 (10 drumsticks)
   maxHunger?: number;
+  armorPoints?: number; // 0 to 20 (10 armor shields)
   isSprinting: boolean;
   damageFlashTrigger: number; // timestamp to trigger 200ms red flash
   activeEvent?: ActiveWorldEvent | null;
@@ -27,6 +28,7 @@ export const SurvivalHUD: React.FC<SurvivalHUDProps> = ({
   maxHealth = 20,
   hunger,
   maxHunger = 20,
+  armorPoints = 0,
   isSprinting,
   damageFlashTrigger,
   activeEvent,
@@ -100,6 +102,52 @@ export const SurvivalHUD: React.FC<SurvivalHUDProps> = ({
       );
     }
     return hearts;
+  };
+
+  // Render 10 Armor Shields (up to 20 Armor Points)
+  const renderArmor = () => {
+    if (armorPoints <= 0) return null;
+    const shields = [];
+    for (let i = 0; i < 10; i++) {
+      const shieldVal = armorPoints - i * 2;
+      const isFull = shieldVal >= 2;
+      const isHalf = shieldVal === 1;
+
+      shields.push(
+        <div key={i} className="relative w-4 h-4 flex items-center justify-center">
+          <svg viewBox="0 0 24 24" className="w-4 h-4 drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]">
+            <path
+              d="M12 2L4 5v6c0 5.55 3.84 10.74 8 12 4.16-1.26 8-6.45 8-12V5l-8-3z"
+              fill="#0f172a"
+              stroke="#334155"
+              strokeWidth="2"
+            />
+            {isFull ? (
+              <path
+                d="M12 2L4 5v6c0 5.55 3.84 10.74 8 12 4.16-1.26 8-6.45 8-12V5l-8-3z"
+                fill="#38bdf8"
+              />
+            ) : isHalf ? (
+              <g>
+                <clipPath id={`half-shield-${i}`}>
+                  <rect x="0" y="0" width="12" height="24" />
+                </clipPath>
+                <path
+                  d="M12 2L4 5v6c0 5.55 3.84 10.74 8 12 4.16-1.26 8-6.45 8-12V5l-8-3z"
+                  fill="#38bdf8"
+                  clipPath={`url(#half-shield-${i})`}
+                />
+              </g>
+            ) : null}
+          </svg>
+        </div>
+      );
+    }
+    return (
+      <div className="flex items-center gap-0.5 bg-slate-950/80 p-1.5 rounded-xl border border-sky-500/40 backdrop-blur-md shadow-lg mb-1 animate-scale-up">
+        {shields}
+      </div>
+    );
   };
 
   // Render 10 Drumsticks / Hunger points (each represents 2 Hunger)
@@ -261,8 +309,9 @@ export const SurvivalHUD: React.FC<SurvivalHUDProps> = ({
 
       {/* Survival HUD Bars (Sitting right above hotbar) */}
       <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-35 pointer-events-none select-none flex items-center justify-between w-[440px] max-w-[94vw] px-2">
-        {/* Left: 10 Hearts (20 HP) */}
+        {/* Left: Armor Bar & 10 Hearts (20 HP) */}
         <div className="flex flex-col gap-0.5">
+          {renderArmor()}
           <div className="flex items-center gap-0.5 bg-slate-950/70 p-1.5 rounded-xl border border-slate-800 backdrop-blur-md shadow-lg">
             {renderHearts()}
           </div>

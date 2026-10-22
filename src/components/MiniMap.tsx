@@ -167,24 +167,10 @@ export const MiniMap: React.FC<MiniMapProps> = ({
     return { label: 'Северо-Запад (NW)', axis: '-X/-Z', deg: Math.round(deg) };
   }, [playerTransform.dirX, playerTransform.dirZ]);
 
-  // Build landmarks including active world event if running
+  // Build landmarks (static world locations only)
   const landmarks: Landmark[] = useMemo(() => {
-    const list = [...DEFAULT_LANDMARKS];
-    if (activeEvent?.targetPos) {
-      list.push({
-        id: 'event',
-        name: activeEvent.title,
-        nameRu: 'Цель события',
-        x: Math.round(activeEvent.targetPos.x),
-        z: Math.round(activeEvent.targetPos.z),
-        type: 'event',
-        icon: '⭐',
-        color: '#c084fc',
-        description: activeEvent.description,
-      });
-    }
-    return list;
-  }, [activeEvent]);
+    return [...DEFAULT_LANDMARKS];
+  }, []);
 
   // Distance to selected target
   const selectedTarget = useMemo(() => {
@@ -756,19 +742,6 @@ export const MiniMap: React.FC<MiniMapProps> = ({
               >
                 📖 Библиотека
               </button>
-              {activeEvent?.targetPos && (
-                <button
-                  onClick={() => setSelectedTargetId('event')}
-                  className={`px-1.5 py-0.5 rounded border transition-colors cursor-pointer shrink-0 animate-pulse ${
-                    selectedTargetId === 'event'
-                      ? 'bg-purple-600 text-white border-purple-400 font-bold'
-                      : 'bg-purple-950/80 text-purple-200 border-purple-700 hover:bg-purple-900'
-                  }`}
-                  title="Ивент"
-                >
-                  ⭐ Ивент
-                </button>
-              )}
             </div>
           </div>
         </div>

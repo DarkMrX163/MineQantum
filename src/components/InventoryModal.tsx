@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
   SlotItem,
+  ArmorSlotsState,
+  calculateTotalArmorPoints,
   ITEM_REGISTRY,
   CRAFTING_RECIPES,
   validateCraftingGrid,
@@ -9,15 +11,17 @@ import {
 } from '../engine/InventorySystem';
 import { ItemIcon } from './ItemIcon';
 import { sound } from '../engine/AudioEngine';
-import { X, Sparkles, BookOpen, Hammer, ChevronRight, Trash2 } from 'lucide-react';
+import { X, Sparkles, BookOpen, Hammer, ChevronRight, Trash2, Shield } from 'lucide-react';
 
 interface InventoryModalProps {
   isOpen: boolean;
   onClose: () => void;
   inventory: (SlotItem | null)[]; // 27 slots
   hotbar: (SlotItem | null)[]; // 9 slots
+  armorSlots: ArmorSlotsState;
   onUpdateInventory: (newInv: (SlotItem | null)[]) => void;
   onUpdateHotbar: (newHotbar: (SlotItem | null)[]) => void;
+  onUpdateArmorSlots: (newArmor: ArmorSlotsState) => void;
   selectedHotbarIndex: number;
 }
 
@@ -26,8 +30,10 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
   onClose,
   inventory,
   hotbar,
+  armorSlots,
   onUpdateInventory,
   onUpdateHotbar,
+  onUpdateArmorSlots,
   selectedHotbarIndex,
 }) => {
   // Crafting Grid state
@@ -149,6 +155,17 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
     } else {
       // --- RIGHT CLICK (ПКМ) ---
       if (!heldItem && currentSlot) {
+        const def = ITEM_REGISTRY[currentSlot.id];
+        if (def && def.type === 'armor' && def.armorSlot) {
+          // Quick right-click equip armor!
+          const targetSlot = def.armorSlot;
+          const oldArmor = armorSlots[targetSlot];
+          onUpdateArmorSlots({ ...armorSlots, [targetSlot]: currentSlot });
+          setSlot(oldArmor);
+          sound.playClick();
+          return;
+        }
+
         // Split stack in half!
         const half = Math.ceil(currentSlot.count / 2);
         const remainder = currentSlot.count - half;
@@ -194,6 +211,33 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
     const newGrid = craftGrid.map((row) => [...row]);
     consumeCraftingIngredients(newGrid, gridDim, gridDim, recipe);
     setCraftGrid(newGrid);
+  };
+
+  const totalArmorPoints = calculateTotalArmorPoints(armorSlots);
+
+  const handleArmorSlotInteraction = (
+    slotKey: 'helmet' | 'chestplate' | 'leggings' | 'boots',
+    e: React.MouseEvent
+  ) => {
+    e.preventDefault();
+    const currentSlot = armorSlots[slotKey];
+
+    if (!heldItem && currentSlot) {
+      // Pick up equipped armor piece
+      setHeldItem(currentSlot);
+      onUpdateArmorSlots({ ...armorSlots, [slotKey]: null });
+      sound.playClick();
+    } else if (heldItem) {
+      const def = ITEM_REGISTRY[heldItem.id];
+      if (def && def.type === 'armor' && def.armorSlot === slotKey) {
+        // Swap or equip armor piece
+        onUpdateArmorSlots({ ...armorSlots, [slotKey]: heldItem });
+        setHeldItem(currentSlot);
+        sound.playClick();
+      } else {
+        sound.playHurt();
+      }
+    }
   };
 
   /**
@@ -255,7 +299,7 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
                 </span>
               </h2>
               <p className="text-xs text-slate-400">
-                LMB: Take/Place • RMB (ПКМ): Split Stack / Place 1 • Drag & Drop
+                LMB: Take/Place • RMB (ПКМ): Quick Equip / Split • Drag & Drop
               </p>
             </div>
           </div>
@@ -270,6 +314,82 @@ export const InventoryModal: React.FC<InventoryModalProps> = ({
             >
               <X className="w-5 h-5" />
             </button>
+          </div>
+        </div>
+
+        {/* Armor Equipment Overlay Panel */}
+        <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-950/80 p-3 rounded-xl border border-slate-800">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-sky-500/20 border border-sky-500/40 flex items-center justify-center text-sky-400">
+              <Shield className="w-4 h-4" />
+            </div>
+            <div>
+              <h3 className="text-xs font-bold text-slate-200">Armor Equipment</h3>
+              <p className="text-[10px] text-slate-400">Click or drag armor piece into slot to equip</p>
+            </div>
+          </div>
+
+          {/* 4 Armor Slots */}
+          <div className="flex items-center gap-2">
+            {(
+              [
+                { key: 'helmet', label: 'Helmet', icon: '🪖' },
+                { key: 'chestplate', label: 'Chestplate', icon: '👕' },
+                { key: 'leggings', label: 'Leggings', icon: '👖' },
+                { key: 'boots', label: 'Boots', icon: '🥾' },
+              ] as const
+            ).map((slotInfo) => {
+              const item = armorSlots[slotInfo.key];
+              const maxD = item ? (item.maxDurability || ITEM_REGISTRY[item.id]?.maxDurability || 100) : 100;
+              const currD = item ? (item.durability !== undefined ? item.durability : maxD) : maxD;
+              const durabilityRatio = item ? Math.max(0, Math.min(1, currD / maxD)) : 1;
+
+              return (
+                <div
+                  key={slotInfo.key}
+                  onMouseDown={(e) => handleArmorSlotInteraction(slotInfo.key, e)}
+                  onMouseEnter={(e) => item && setHoveredItem({ item, x: e.clientX, y: e.clientY })}
+                  onMouseLeave={() => setHoveredItem(null)}
+                  className={`w-11 h-11 rounded-xl border flex flex-col items-center justify-center relative cursor-pointer transition-all ${
+                    item
+                      ? 'bg-sky-950/40 border-sky-400/80 shadow-[0_0_12px_rgba(56,189,248,0.3)] hover:scale-105'
+                      : 'bg-slate-900 border-slate-700/80 hover:border-slate-500'
+                  }`}
+                  title={`${slotInfo.label} Equipment Slot`}
+                >
+                  {item ? (
+                    <>
+                      <ItemIcon itemId={item.id} className="w-6 h-6 pointer-events-none" />
+                      {/* Durability Bar */}
+                      <div className="absolute bottom-1 left-1 right-1 h-1 bg-slate-950 rounded-full overflow-hidden border border-black/40">
+                        <div
+                          className="h-full transition-all"
+                          style={{
+                            width: `${durabilityRatio * 100}%`,
+                            backgroundColor:
+                              durabilityRatio > 0.5 ? '#22c55e' : durabilityRatio > 0.25 ? '#eab308' : '#ef4444',
+                          }}
+                        />
+                      </div>
+                    </>
+                  ) : (
+                    <span className="text-sm opacity-40 select-none">{slotInfo.icon}</span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Total Armor Badge */}
+          <div className="flex items-center gap-2 bg-slate-900/90 px-3 py-1.5 rounded-xl border border-sky-500/30">
+            <div className="flex flex-col text-right">
+              <span className="text-xs font-mono font-bold text-sky-300">
+                🛡️ {totalArmorPoints} / 20 Armor
+              </span>
+              <span className="text-[10px] text-emerald-400 font-mono font-semibold">
+                -{((totalArmorPoints / 20) * 75).toFixed(0)}% Damage Taken
+              </span>
+            </div>
           </div>
         </div>
 

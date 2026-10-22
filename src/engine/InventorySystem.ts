@@ -15,13 +15,43 @@ export interface SlotItem {
   maxStack: number;
 }
 
+export interface ArmorSlotsState {
+  helmet: SlotItem | null;
+  chestplate: SlotItem | null;
+  leggings: SlotItem | null;
+  boots: SlotItem | null;
+}
+
+export function calculateTotalArmorPoints(armorSlots: ArmorSlotsState): number {
+  let total = 0;
+  if (armorSlots.helmet) {
+    const def = ITEM_REGISTRY[armorSlots.helmet.id];
+    if (def && def.armorPoints) total += def.armorPoints;
+  }
+  if (armorSlots.chestplate) {
+    const def = ITEM_REGISTRY[armorSlots.chestplate.id];
+    if (def && def.armorPoints) total += def.armorPoints;
+  }
+  if (armorSlots.leggings) {
+    const def = ITEM_REGISTRY[armorSlots.leggings.id];
+    if (def && def.armorPoints) total += def.armorPoints;
+  }
+  if (armorSlots.boots) {
+    const def = ITEM_REGISTRY[armorSlots.boots.id];
+    if (def && def.armorPoints) total += def.armorPoints;
+  }
+  return Math.min(20, total);
+}
+
 export interface ItemDefinition {
   id: string;
   name: string;
-  type: 'block' | 'tool' | 'weapon' | 'material' | 'food';
+  type: 'block' | 'tool' | 'weapon' | 'material' | 'food' | 'armor';
   blockId?: BlockId;
   toolType?: 'pickaxe' | 'axe' | 'shovel' | 'sword' | 'none';
   toolTier?: 'none' | 'wood' | 'stone' | 'iron' | 'diamond';
+  armorSlot?: 'helmet' | 'chestplate' | 'leggings' | 'boots';
+  armorPoints?: number;
   miningSpeedMultiplier: number;
   attackDamage?: number;
   foodValue?: number;
@@ -123,6 +153,154 @@ export const ITEM_REGISTRY: Record<string, ItemDefinition> = {
     maxDurability: 1561,
     color: '#38bdf8',
     description: 'Instantly digs dirt, grass, and sand.',
+  },
+
+  // Armor Sets (Diamond, Iron, Leather)
+  diamond_helmet: {
+    id: 'diamond_helmet',
+    name: 'Diamond Helmet',
+    type: 'armor',
+    armorSlot: 'helmet',
+    armorPoints: 3,
+    miningSpeedMultiplier: 1.0,
+    maxStack: 1,
+    maxDurability: 363,
+    color: '#38bdf8',
+    description: '+3 Armor Points. Extreme durability head protection.',
+  },
+  diamond_chestplate: {
+    id: 'diamond_chestplate',
+    name: 'Diamond Chestplate',
+    type: 'armor',
+    armorSlot: 'chestplate',
+    armorPoints: 8,
+    miningSpeedMultiplier: 1.0,
+    maxStack: 1,
+    maxDurability: 528,
+    color: '#38bdf8',
+    description: '+8 Armor Points. Legendary chest armor.',
+  },
+  diamond_leggings: {
+    id: 'diamond_leggings',
+    name: 'Diamond Leggings',
+    type: 'armor',
+    armorSlot: 'leggings',
+    armorPoints: 6,
+    miningSpeedMultiplier: 1.0,
+    maxStack: 1,
+    maxDurability: 495,
+    color: '#38bdf8',
+    description: '+6 Armor Points. Sturdy diamond leg guards.',
+  },
+  diamond_boots: {
+    id: 'diamond_boots',
+    name: 'Diamond Boots',
+    type: 'armor',
+    armorSlot: 'boots',
+    armorPoints: 3,
+    miningSpeedMultiplier: 1.0,
+    maxStack: 1,
+    maxDurability: 429,
+    color: '#38bdf8',
+    description: '+3 Armor Points. Reinforced diamond boots.',
+  },
+
+  iron_helmet: {
+    id: 'iron_helmet',
+    name: 'Iron Helmet',
+    type: 'armor',
+    armorSlot: 'helmet',
+    armorPoints: 2,
+    miningSpeedMultiplier: 1.0,
+    maxStack: 1,
+    maxDurability: 165,
+    color: '#e2e8f0',
+    description: '+2 Armor Points. Sturdy iron helmet.',
+  },
+  iron_chestplate: {
+    id: 'iron_chestplate',
+    name: 'Iron Chestplate',
+    type: 'armor',
+    armorSlot: 'chestplate',
+    armorPoints: 6,
+    miningSpeedMultiplier: 1.0,
+    maxStack: 1,
+    maxDurability: 240,
+    color: '#e2e8f0',
+    description: '+6 Armor Points. Heavy iron plate mail.',
+  },
+  iron_leggings: {
+    id: 'iron_leggings',
+    name: 'Iron Leggings',
+    type: 'armor',
+    armorSlot: 'leggings',
+    armorPoints: 5,
+    miningSpeedMultiplier: 1.0,
+    maxStack: 1,
+    maxDurability: 225,
+    color: '#e2e8f0',
+    description: '+5 Armor Points. Reliable iron leggings.',
+  },
+  iron_boots: {
+    id: 'iron_boots',
+    name: 'Iron Boots',
+    type: 'armor',
+    armorSlot: 'boots',
+    armorPoints: 2,
+    miningSpeedMultiplier: 1.0,
+    maxStack: 1,
+    maxDurability: 195,
+    color: '#e2e8f0',
+    description: '+2 Armor Points. Iron plated boots.',
+  },
+
+  leather_helmet: {
+    id: 'leather_helmet',
+    name: 'Leather Cap',
+    type: 'armor',
+    armorSlot: 'helmet',
+    armorPoints: 1,
+    miningSpeedMultiplier: 1.0,
+    maxStack: 1,
+    maxDurability: 55,
+    color: '#9a3412',
+    description: '+1 Armor Point. Light leather headwear.',
+  },
+  leather_chestplate: {
+    id: 'leather_chestplate',
+    name: 'Leather Tunic',
+    type: 'armor',
+    armorSlot: 'chestplate',
+    armorPoints: 3,
+    miningSpeedMultiplier: 1.0,
+    maxStack: 1,
+    maxDurability: 80,
+    color: '#9a3412',
+    description: '+3 Armor Points. Basic leather tunic.',
+  },
+  leather_leggings: {
+    id: 'leather_leggings',
+    name: 'Leather Pants',
+    type: 'armor',
+    armorSlot: 'leggings',
+    armorPoints: 2,
+    miningSpeedMultiplier: 1.0,
+    maxStack: 1,
+    maxDurability: 75,
+    color: '#9a3412',
+    description: '+2 Armor Points. Flexible leather pants.',
+  },
+  leather_boots: {
+    id: 'leather_boots',
+    name: 'Leather Boots',
+    type: 'armor',
+    armorSlot: 'boots',
+    armorPoints: 1,
+    miningSpeedMultiplier: 1.0,
+    maxStack: 1,
+    maxDurability: 65,
+    color: '#9a3412',
+    description: '+1 Armor Point. Light leather footwear.',
   },
 
   // Food Items

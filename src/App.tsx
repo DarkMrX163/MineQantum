@@ -14,7 +14,7 @@ import { SurvivalHUD } from './components/SurvivalHUD';
 import { DeathScreen } from './components/DeathScreen';
 import { JoinModal } from './components/JoinModal';
 import { BLOCK, BlockId, ChunkStats } from './engine/types';
-import { SlotItem, ITEM_REGISTRY } from './engine/InventorySystem';
+import { SlotItem, ITEM_REGISTRY, ArmorSlotsState, calculateTotalArmorPoints } from './engine/InventorySystem';
 import { sound } from './engine/AudioEngine';
 import { PlayerTransform } from './components/MiniMap';
 
@@ -156,6 +156,15 @@ export default function App() {
   const [inventory, setInventory] = useState<(SlotItem | null)[]>(
     Array(27).fill(null)
   );
+
+  const [armorSlots, setArmorSlots] = useState<ArmorSlotsState>({
+    helmet: { id: 'iron_helmet', count: 1, durability: 165, maxDurability: 165, maxStack: 1 },
+    chestplate: { id: 'iron_chestplate', count: 1, durability: 240, maxDurability: 240, maxStack: 1 },
+    leggings: null,
+    boots: null,
+  });
+
+  const totalArmorPoints = calculateTotalArmorPoints(armorSlots);
 
   const [selectedHotbarIndex, setSelectedHotbarIndex] = useState(0);
   const [isInventoryOpen, setIsInventoryOpen] = useState(false);
@@ -321,11 +330,52 @@ export default function App() {
   const handleTakeDamage = useCallback((amount: number, reason: string) => {
     if (isDead) return;
 
+    let effectiveDamage = amount;
+
+    // Armor damage reduction & durability degradation for physical hits
+    if (reason === 'mob' || reason === 'fall' || reason === 'explosion') {
+      const currentArmorPoints = calculateTotalArmorPoints(armorSlots);
+      if (currentArmorPoints > 0) {
+        // Max 75% reduction at 20 armor points
+        const reductionRatio = (currentArmorPoints / 20) * 0.75;
+        effectiveDamage = Math.max(1, Math.round(amount * (1 - reductionRatio)));
+
+        // Reduce durability of each equipped armor piece
+        setArmorSlots((prevArmor) => {
+          const nextArmor = { ...prevArmor };
+          let anyBroken = false;
+
+          (['helmet', 'chestplate', 'leggings', 'boots'] as const).forEach((slot) => {
+            const item = nextArmor[slot];
+            if (item) {
+              const maxD = item.maxDurability || ITEM_REGISTRY[item.id]?.maxDurability || 100;
+              const currentD = item.durability !== undefined ? item.durability : maxD;
+              const newD = currentD - 1;
+
+              if (newD <= 0) {
+                nextArmor[slot] = null; // Armor piece broke!
+                anyBroken = true;
+              } else {
+                nextArmor[slot] = { ...item, durability: newD, maxDurability: maxD };
+              }
+            }
+          });
+
+          if (anyBroken) {
+            sound.playBlockBreak();
+            handleEventNotification('🛡️ Ваша броня сломалась от удара!');
+          }
+
+          return nextArmor;
+        });
+      }
+    }
+
     sound.playHurt();
     setDamageFlashTrigger(Date.now());
 
     setHealth((prevHealth) => {
-      const nextHealth = Math.max(0, prevHealth - amount);
+      const nextHealth = Math.max(0, prevHealth - effectiveDamage);
       if (nextHealth <= 0) {
         setIsDead(true);
         let reasonText = 'Вы погибли!';
@@ -335,13 +385,17 @@ export default function App() {
         else if (reason === 'starvation') reasonText = 'Погиб от голода и истощения';
         setDeathReason(reasonText);
 
-        // Scatter all hotbar and inventory items at death coordinates in 3D
+        // Scatter all hotbar, inventory, and armor items at death coordinates in 3D
         setHotbar((currHotbar) => {
           setInventory((currInv) => {
-            const allItems = [...currHotbar, ...currInv].filter(Boolean);
-            setDeathScatterTrigger({
-              items: allItems,
-              timestamp: Date.now(),
+            setArmorSlots((currArmor) => {
+              const armorItems = Object.values(currArmor).filter(Boolean);
+              const allItems = [...currHotbar, ...currInv, ...armorItems].filter(Boolean);
+              setDeathScatterTrigger({
+                items: allItems,
+                timestamp: Date.now(),
+              });
+              return { helmet: null, chestplate: null, leggings: null, boots: null };
             });
             return Array(27).fill(null);
           });
@@ -350,7 +404,7 @@ export default function App() {
       }
       return nextHealth;
     });
-  }, [isDead]);
+  }, [isDead, armorSlots]);
 
   // Food Eating Handler: Restores hunger and removes food item
   const handleEatFood = useCallback((item: SlotItem) => {
@@ -494,11 +548,12 @@ export default function App() {
         </div>
       )}
 
-      {/* 20 HP (10 Hearts) & 20 Hunger (10 Drumsticks) Survival HUD + MiniMap */}
+      {/* 20 HP (10 Hearts) & 20 Hunger (10 Drumsticks) & 20 Armor (10 Shields) Survival HUD + MiniMap */}
       {activeTab === 'game' && !isDead && (
         <SurvivalHUD
           health={health}
           hunger={hunger}
+          armorPoints={totalArmorPoints}
           isSprinting={isSprinting}
           damageFlashTrigger={damageFlashTrigger}
           activeEvent={activeEvent}
@@ -536,8 +591,10 @@ export default function App() {
         onClose={() => setIsInventoryOpen(false)}
         inventory={inventory}
         hotbar={hotbar}
+        armorSlots={armorSlots}
         onUpdateInventory={setInventory}
         onUpdateHotbar={setHotbar}
+        onUpdateArmorSlots={setArmorSlots}
         selectedHotbarIndex={selectedHotbarIndex}
       />
 
