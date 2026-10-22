@@ -1216,6 +1216,8 @@ export const VoxelCanvas: React.FC<VoxelCanvasProps> = ({
             controllerRef.current.lock();
           }
         }}
+        onOpenInventory={onOpenCraftingTable}
+        onToggleCamera={() => controllerRef.current?.toggleCameraMode()}
       />
     </div>
   );

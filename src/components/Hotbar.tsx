@@ -78,7 +78,7 @@ export const Hotbar: React.FC<HotbarProps> = ({
       )}
 
       {/* 9 Hotbar Slots Container */}
-      <div className="bg-slate-900/90 backdrop-blur-md p-1.5 rounded-2xl border-2 border-slate-700/90 shadow-2xl flex items-center gap-1.5">
+      <div className="bg-slate-900/90 backdrop-blur-md p-1 sm:p-1.5 rounded-2xl border-2 border-slate-700/90 shadow-2xl flex items-center gap-0.5 sm:gap-1.5 max-w-[96vw] overflow-x-auto">
         {Array.from({ length: 9 }).map((_, idx) => {
           const item = hotbar[idx];
           const isSelected = selectedIndex === idx;
@@ -101,34 +101,34 @@ export const Hotbar: React.FC<HotbarProps> = ({
                   sound.playClick();
                 }
               }}
-              className={`relative w-12 h-12 rounded-xl flex items-center justify-center transition-all cursor-pointer ${
+              className={`relative w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 rounded-xl flex items-center justify-center transition-all cursor-pointer shrink-0 ${
                 isSelected
                   ? 'bg-slate-700/90 border-2 border-amber-400 shadow-[0_0_15px_rgba(251,191,36,0.5)] -translate-y-1'
                   : 'bg-slate-800/80 hover:bg-slate-700/60 border border-slate-700/60'
               }`}
             >
               {/* Slot Number Hint */}
-              <span className="absolute top-0.5 left-1 text-[9px] font-mono text-slate-400/80">
+              <span className="absolute top-0.5 left-1 text-[8px] sm:text-[9px] font-mono text-slate-400/80">
                 {idx + 1}
               </span>
 
               {/* Item Icon */}
               {item && (
-                <div className="w-8 h-8 flex items-center justify-center pointer-events-none">
-                  <ItemIcon itemId={item.id} className="w-8 h-8" />
+                <div className="w-5 h-5 sm:w-6 sm:h-6 md:w-8 md:h-8 flex items-center justify-center pointer-events-none">
+                  <ItemIcon itemId={item.id} className="w-5 h-5 sm:w-6 sm:h-6 md:w-8 md:h-8" />
                 </div>
               )}
 
               {/* Stack Count Badge */}
               {item && item.count > 1 && (
-                <span className="absolute bottom-0.5 right-1 text-[11px] font-mono font-bold text-white drop-shadow-[0_1px_2px_rgba(0,0,0,1)]">
+                <span className="absolute bottom-0.5 right-1 text-[9px] sm:text-[11px] font-mono font-bold text-white drop-shadow-[0_1px_2px_rgba(0,0,0,1)]">
                   {item.count}
                 </span>
               )}
 
               {/* Durability Bar */}
               {durPercent !== null && (
-                <div className="absolute bottom-1 left-1.5 right-1.5 h-1 bg-slate-950/90 rounded-full overflow-hidden border border-black/40">
+                <div className="absolute bottom-0.5 sm:bottom-1 left-1 right-1 h-0.5 sm:h-1 bg-slate-950/90 rounded-full overflow-hidden border border-black/40">
                   <div
                     className={`h-full rounded-full transition-all ${
                       durPercent > 50
@@ -148,10 +148,10 @@ export const Hotbar: React.FC<HotbarProps> = ({
         {/* E Button to open full Inventory */}
         <button
           onClick={onOpenInventory}
-          className="ml-1 px-2.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-mono text-xs font-bold shadow-md transition flex items-center gap-1 cursor-pointer"
+          className="ml-0.5 sm:ml-1 px-2 py-1.5 sm:px-2.5 sm:py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-mono text-[10px] sm:text-xs font-bold shadow-md transition flex items-center gap-1 cursor-pointer shrink-0"
           title="Press E to open Inventory & Crafting"
         >
-          <span className="px-1 py-0.2 bg-emerald-800 rounded text-[10px]">E</span>
+          <span className="hidden sm:inline px-1 py-0.2 bg-emerald-800 rounded text-[10px]">E</span>
           <span>Craft</span>
         </button>
       </div>
