@@ -22,7 +22,9 @@ export type MobType =
   | "sheep"
   | "pig"
   | "bird"
-  | "villager";
+  | "villager"
+  | "wolf"
+  | "pet_wolf";
 
 export interface ActiveMob {
   id: string;
@@ -212,6 +214,93 @@ export class MobManager {
     return { interacted: false };
   }
 
+  /**
+   * Player interaction (Right-click) with mobs using held item (Bone to tame Wolf, Wheat to feed animals)
+   */
+  public interactMobAtRay(
+    camera: THREE.PerspectiveCamera,
+    heldItemId?: string | null,
+  ): { interacted: boolean; message?: string } {
+    if (!heldItemId) return { interacted: false };
+
+    const rayOrigin = camera.position;
+    const rayDir = new THREE.Vector3();
+    camera.getWorldDirection(rayDir);
+
+    let closestMob: ActiveMob | null = null;
+    let closestDist = 3.8;
+
+    this.mobs.forEach((mob) => {
+      const mobCenter = mob.position.clone().add(new THREE.Vector3(0, 0.8, 0));
+      const toMob = new THREE.Vector3().subVectors(mobCenter, rayOrigin);
+      const proj = toMob.dot(rayDir);
+
+      if (proj > 0.3 && proj < closestDist) {
+        const perpDist = toMob.clone().addScaledVector(rayDir, -proj).length();
+        if (perpDist < 1.1) {
+          closestDist = proj;
+          closestMob = mob;
+        }
+      }
+    });
+
+    if (!closestMob) return { interacted: false };
+
+    const mob: ActiveMob = closestMob;
+
+    // 1. Taming Wild Wolf with Bone
+    if ((mob.type === "wolf" || mob.type === "pet_wolf") && heldItemId === "bone") {
+      if (mob.type === "wolf") {
+        if (Math.random() < 0.7) {
+          mob.type = "pet_wolf";
+          mob.health = 24;
+          sound.playLevelUp();
+
+          // Add Red Collar Mesh to Wolf
+          const collarGeo = new THREE.BoxGeometry(0.42, 0.15, 0.42);
+          const collarMat = new THREE.MeshBasicMaterial({ color: 0xef4444 });
+          const collarMesh = new THREE.Mesh(collarGeo, collarMat);
+          collarMesh.position.set(0, 0.55, 0.2);
+          mob.meshGroup.add(collarMesh);
+
+          return {
+            interacted: true,
+            message: "🐕 Вы успешно приручили дикого волка! Теперь это ваш верный питомец.",
+          };
+        } else {
+          sound.playPop();
+          return {
+            interacted: true,
+            message: "🦴 Волк съел кость, но пока не приручился. Попробуйте ещё!",
+          };
+        }
+      } else {
+        // Feed tamed pet wolf
+        mob.health = Math.min(24, mob.health + 8);
+        sound.playPop();
+        if (this.onFriendlyPetGiveFood) {
+          this.onFriendlyPetGiveFood(mob.position.clone(), "bone");
+        }
+        return { interacted: true, message: "💖 Вы покормили питомца!" };
+      }
+    }
+
+    // 2. Feeding Farm Animals with Wheat/Food
+    if (
+      (mob.type === "cow" || mob.type === "sheep" || mob.type === "pig") &&
+      (heldItemId === "wheat" || heldItemId === "apple" || heldItemId === "bread")
+    ) {
+      mob.health = Math.min(15, mob.health + 5);
+      sound.playPop();
+      if (this.onFriendlyPetGiveFood) {
+        this.onFriendlyPetGiveFood(mob.position.clone(), heldItemId);
+      }
+      return { interacted: true, message: "🌾 Вы покормили животное!" };
+    }
+
+    return { interacted: false };
+  }
+
   public spawnMob(type: MobType, position: THREE.Vector3): ActiveMob {
     const id = `mob_${type}_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
     let parts: any;
@@ -264,6 +353,11 @@ export class MobManager {
     } else if (type === "villager") {
       mat = this.villagerMaterial.clone();
       parts = EntityModelBuilder.buildVillager(mat);
+    } else if (type === "wolf" || type === "pet_wolf") {
+      mat = new THREE.MeshLambertMaterial({
+        color: type === "pet_wolf" ? 0xe5e7eb : 0x9ca3af,
+      });
+      parts = EntityModelBuilder.buildWolf(mat, type === "pet_wolf");
     } else {
       mat = this.pigMaterial.clone();
       parts = EntityModelBuilder.buildQuadruped(mat, "pig");
@@ -541,6 +635,68 @@ export class MobManager {
             mob.targetRotationY = flyAngle;
             mob.walkSpeed = 0.75;
             mob.stateTimer = 6.0 + Math.random() * 6.0;
+          }
+        }
+      } else if (mob.type === "pet_wolf") {
+        let nearestHostile: ActiveMob | null = null;
+        let nearestHostileDist = 18.0;
+
+        this.mobs.forEach((other) => {
+          if (
+            other.type === "zombie" ||
+            other.type === "skeleton" ||
+            other.type === "creeper" ||
+            other.type === "enderman"
+          ) {
+            const d = mob.position.distanceTo(other.position);
+            if (d < nearestHostileDist) {
+              nearestHostileDist = d;
+              nearestHostile = other;
+            }
+          }
+        });
+
+        if (nearestHostile) {
+          const target: ActiveMob = nearestHostile;
+          const hx = target.position.x - mob.position.x;
+          const hz = target.position.z - mob.position.z;
+          const hDist = Math.hypot(hx, hz);
+
+          if (hDist < 1.4) {
+            mob.walkSpeed = 0;
+            if (mob.attackCooldown <= 0) {
+              mob.attackCooldown = 0.8;
+              target.health -= 5;
+              sound.playHurt();
+              target.material.color.setHex(0xff0000);
+              setTimeout(
+                () => target.material && target.material.color.setHex(0xffffff),
+                200,
+              );
+            }
+          } else {
+            mob.state = "chase";
+            mob.targetPos = target.position.clone();
+            mob.targetRotationY = Math.atan2(hx, hz);
+            mob.walkSpeed = 0.85;
+          }
+        } else {
+          const px = playerPosition.x - mob.position.x;
+          const pz = playerPosition.z - mob.position.z;
+          const pDist = Math.hypot(px, pz);
+
+          if (pDist > 22.0) {
+            mob.position.copy(playerPosition).add(new THREE.Vector3(1, 0, 1));
+            mob.meshGroup.position.copy(mob.position);
+          } else if (pDist > 3.5) {
+            mob.state = "chase";
+            mob.targetPos = playerPosition.clone();
+            mob.targetRotationY = Math.atan2(px, pz);
+            mob.walkSpeed = 0.65;
+          } else {
+            mob.walkSpeed = 0;
+            mob.state = "idle";
+            mob.targetRotationY = Math.atan2(px, pz);
           }
         }
       } else if (mob.type === "steve") {

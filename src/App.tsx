@@ -15,6 +15,7 @@ import { DeathScreen } from './components/DeathScreen';
 import { JoinModal } from './components/JoinModal';
 import { BLOCK, BlockId, ChunkStats } from './engine/types';
 import { SlotItem, ITEM_REGISTRY, ArmorSlotsState, calculateTotalArmorPoints } from './engine/InventorySystem';
+import { PotionsAndEnchanting, ActivePotionEffect } from './engine/PotionsAndEnchanting';
 import { sound } from './engine/AudioEngine';
 import { PlayerTransform } from './components/MiniMap';
 
@@ -168,6 +169,84 @@ export default function App() {
 
   const [selectedHotbarIndex, setSelectedHotbarIndex] = useState(0);
   const [isInventoryOpen, setIsInventoryOpen] = useState(false);
+  const [initialModalTab, setInitialModalTab] = useState<'crafting' | 'enchanting' | 'brewing'>('crafting');
+
+  const [chestState, setChestState] = useState<{
+    x: number;
+    y: number;
+    z: number;
+    items: (SlotItem | null)[];
+    onUpdateChest: (items: (SlotItem | null)[]) => void;
+  } | null>(null);
+
+  const [activePotionEffects, setActivePotionEffects] = useState<ActivePotionEffect[]>([]);
+  const potionsAndEnchantingRef = useRef(new PotionsAndEnchanting());
+
+  const handleOpenChest = useCallback(
+    (chestData: {
+      x: number;
+      y: number;
+      z: number;
+      items: (SlotItem | null)[];
+      onUpdateChest: (items: (SlotItem | null)[]) => void;
+    }) => {
+      setChestState(chestData);
+      setIsInventoryOpen(true);
+    },
+    []
+  );
+
+  const handleOpenEnchantingTable = useCallback(() => {
+    setChestState(null);
+    setInitialModalTab('enchanting');
+    setIsInventoryOpen(true);
+  }, []);
+
+  const handleOpenBrewingStand = useCallback(() => {
+    setChestState(null);
+    setInitialModalTab('brewing');
+    setIsInventoryOpen(true);
+  }, []);
+
+  const handleOpenCraftingTable = useCallback(() => {
+    setChestState(null);
+    setInitialModalTab('crafting');
+    setIsInventoryOpen(true);
+  }, []);
+
+  const handleDrinkPotion = useCallback(
+    (potionId: string) => {
+      const rawId = potionId.replace('potion_', '') as any;
+      potionsAndEnchantingRef.current.applyPotion(rawId, (heal) => {
+        setHealth((prev) => Math.min(20, prev + heal));
+      });
+      sound.playPop();
+      handleEventNotification(`🧪 Вы выпили зелье!`);
+
+      setHotbar((prev) => {
+        const copy = [...prev];
+        const slot = copy[selectedHotbarIndex];
+        if (slot && slot.id === potionId) {
+          const newCount = slot.count - 1;
+          copy[selectedHotbarIndex] = newCount > 0 ? { ...slot, count: newCount } : null;
+        }
+        return copy;
+      });
+    },
+    [selectedHotbarIndex]
+  );
+
+  // Active Potion tick loop
+  useEffect(() => {
+    const timer = setInterval(() => {
+      const effects = potionsAndEnchantingRef.current.update(0.5, (heal) => {
+        setHealth((prev) => Math.min(20, prev + heal));
+      });
+      setActivePotionEffects([...potionsAndEnchantingRef.current.activeEffects]);
+    }, 500);
+
+    return () => clearInterval(timer);
+  }, []);
 
   // Synchronous refs for accurate, atomic item collection without duplicate race conditions
   const hotbarRef = useRef(hotbar);
@@ -501,7 +580,11 @@ export default function App() {
           onSprintChange={setIsSprinting}
           canSprint={canSprint}
           onEatFood={handleEatFood}
-          onOpenCraftingTable={() => setIsInventoryOpen(true)}
+          onDrinkPotion={handleDrinkPotion}
+          onOpenCraftingTable={handleOpenCraftingTable}
+          onOpenChest={handleOpenChest}
+          onOpenEnchantingTable={handleOpenEnchantingTable}
+          onOpenBrewingStand={handleOpenBrewingStand}
           respawnTrigger={respawnTrigger}
           deathScatterTrigger={deathScatterTrigger}
           isFlyMode={isFlyMode}
@@ -564,6 +647,7 @@ export default function App() {
           remotePlayers={remotePlayers}
           onShareLink={handleShareLink}
           cameraMode={cameraMode}
+          activePotionEffects={activePotionEffects}
         />
       )}
 
@@ -588,7 +672,10 @@ export default function App() {
       {/* Full Minecraft-Style Inventory & Crafting Modal (Opened with Key E) */}
       <InventoryModal
         isOpen={isInventoryOpen}
-        onClose={() => setIsInventoryOpen(false)}
+        onClose={() => {
+          setIsInventoryOpen(false);
+          setChestState(null);
+        }}
         inventory={inventory}
         hotbar={hotbar}
         armorSlots={armorSlots}
@@ -596,6 +683,8 @@ export default function App() {
         onUpdateHotbar={setHotbar}
         onUpdateArmorSlots={setArmorSlots}
         selectedHotbarIndex={selectedHotbarIndex}
+        chestState={chestState}
+        initialTab={initialModalTab}
       />
 
       {/* Unified HUD / Control Dock */}

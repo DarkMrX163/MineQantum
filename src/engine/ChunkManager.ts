@@ -114,6 +114,7 @@ export class ChunkManager {
   private chunks: Map<string, Chunk> = new Map();
   private sharedMaterial: THREE.Material;
   public lightManager: LightManager;
+  public chestInventories: Map<string, any[]> = new Map();
 
   public terrainScale: number = 0.015;
   public terrainHeight: number = 18;
@@ -121,6 +122,28 @@ export class ChunkManager {
   public caveThreshold: number = 0.42;
   public skyIntensity: number = 1.0; // 1.0 = Daytime, 0.15 = Nighttime
   public enableAO: boolean = true; // 4-level Ambient Occlusion (0%, 20%, 40%, 60%)
+
+  public getChestStorage(x: number, y: number, z: number): any[] {
+    const key = `${Math.floor(x)},${Math.floor(y)},${Math.floor(z)}`;
+    if (!this.chestInventories.has(key)) {
+      const defaultLoot: any[] = Array(27).fill(null);
+      defaultLoot[0] = { id: "gold_ingot", count: 4, maxStack: 64 };
+      defaultLoot[1] = { id: "diamond", count: 2, maxStack: 64 };
+      defaultLoot[2] = { id: "lapis_lazuli", count: 12, maxStack: 64 };
+      defaultLoot[3] = { id: "bread", count: 6, maxStack: 64 };
+      defaultLoot[4] = { id: "iron_chestplate", count: 1, durability: 240, maxDurability: 240, maxStack: 1 };
+      defaultLoot[5] = { id: "potion_healing", count: 2, maxStack: 16 };
+      defaultLoot[6] = { id: "potion_speed", count: 1, maxStack: 16 };
+      defaultLoot[7] = { id: "bone", count: 5, maxStack: 64 };
+      this.chestInventories.set(key, defaultLoot);
+    }
+    return this.chestInventories.get(key)!;
+  }
+
+  public setChestStorage(x: number, y: number, z: number, items: any[]): void {
+    const key = `${Math.floor(x)},${Math.floor(y)},${Math.floor(z)}`;
+    this.chestInventories.set(key, items);
+  }
 
   constructor(material: THREE.Material) {
     this.sharedMaterial = material;

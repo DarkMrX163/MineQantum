@@ -95,7 +95,11 @@ export class FirstPersonController {
   public onSprintStateChange?: (isSprinting: boolean) => void;
   public onAttackMobRequest?: () => boolean;
   public onEatFood?: (item: SlotItem) => void;
+  public onDrinkPotion?: (potionId: string) => void;
   public onOpenCraftingTable?: () => void;
+  public onOpenChest?: (pos: { x: number; y: number; z: number }) => void;
+  public onOpenEnchantingTable?: () => void;
+  public onOpenBrewingStand?: () => void;
   public onInteractMobRequest?: () => boolean;
 
   constructor(
@@ -809,12 +813,18 @@ export class FirstPersonController {
         return;
       }
 
-      // Check if player is holding food and wants to eat
+      // Check if player is holding food and wants to eat or potion and wants to drink
       if (this.activeHeldItem) {
         const itemDef = ITEM_REGISTRY[this.activeHeldItem.id];
         if (itemDef && itemDef.type === "food") {
           if (this.onEatFood) {
             this.onEatFood(this.activeHeldItem);
+            return;
+          }
+        }
+        if (this.activeHeldItem.id.startsWith("potion_")) {
+          if (this.onDrinkPotion) {
+            this.onDrinkPotion(this.activeHeldItem.id);
             return;
           }
         }
@@ -843,7 +853,6 @@ export class FirstPersonController {
             blockId,
             this.activeHeldItem,
           );
-          // If breakDuration is very low (diamond pickaxe or instant block), break immediately!
           if (breakDuration <= 0.15) {
             this.completeBlockBreak(
               hit.blockPos.x,
@@ -877,11 +886,9 @@ export class FirstPersonController {
           const hy = hit.blockPos.y;
           const hz = hit.blockPos.z;
 
-          // Toggle the targeted door block
           this.chunkManager.setBlockGlobal(hx, hy, hz, newBlockId, this.scene);
           this.netManager?.sendBlockEdit(hx, hy, hz, newBlockId);
 
-          // Synchronously toggle connected upper or lower door block
           const aboveBlock = this.chunkManager.getBlockGlobal(hx, hy + 1, hz);
           if (aboveBlock === BLOCK.DOOR || aboveBlock === BLOCK.DOOR_OPEN) {
             this.chunkManager.setBlockGlobal(
@@ -909,7 +916,21 @@ export class FirstPersonController {
           return;
         }
 
-        // Check if target block is a Crafting Table block
+        if (targetBlockId === BLOCK.CHEST && this.onOpenChest) {
+          this.onOpenChest(hit.blockPos);
+          return;
+        }
+
+        if (targetBlockId === BLOCK.ENCHANTING_TABLE && this.onOpenEnchantingTable) {
+          this.onOpenEnchantingTable();
+          return;
+        }
+
+        if (targetBlockId === BLOCK.BREWING_STAND && this.onOpenBrewingStand) {
+          this.onOpenBrewingStand();
+          return;
+        }
+
         if (
           targetBlockId === BLOCK.CRAFTING_TABLE &&
           this.onOpenCraftingTable

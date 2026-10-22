@@ -32,6 +32,9 @@ export const BLOCK = {
   DOOR: 20,
   DOOR_OPEN: 21,
   PATH: 22,
+  CHEST: 23,
+  ENCHANTING_TABLE: 24,
+  BREWING_STAND: 25,
 } as const;
 
 export type BlockId = (typeof BLOCK)[keyof typeof BLOCK];
@@ -225,6 +228,29 @@ export const BLOCK_DEFS: Record<number, BlockInfo> = {
     transparent: false,
     solid: true,
     tiles: { top: 23, bottom: 2, sides: 2 },
+  },
+  [BLOCK.CHEST]: {
+    id: 23,
+    name: "Wooden Chest",
+    transparent: false,
+    solid: true,
+    tiles: { top: 12, bottom: 12, sides: 15 },
+  },
+  [BLOCK.ENCHANTING_TABLE]: {
+    id: 24,
+    name: "Enchanting Table",
+    transparent: true,
+    solid: true,
+    lightEmission: 7,
+    tiles: { top: 19, bottom: 1, sides: 10 },
+  },
+  [BLOCK.BREWING_STAND]: {
+    id: 25,
+    name: "Brewing Stand",
+    transparent: true,
+    solid: false,
+    lightEmission: 6,
+    tiles: { top: 13, bottom: 12, sides: 13 },
   },
 };
 

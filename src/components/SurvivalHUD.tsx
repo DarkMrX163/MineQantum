@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { Heart, Flame, Zap, User, Edit3, Share2, Camera } from 'lucide-react';
+import { Heart, Flame, Zap, User, Edit3, Share2, Camera, Shield } from 'lucide-react';
 
 import { ActiveWorldEvent } from '../engine/WorldEventManager';
+import { ActivePotionEffect } from '../engine/PotionsAndEnchanting';
 import { MiniMap, PlayerTransform } from './MiniMap';
 
 interface SurvivalHUDProps {
@@ -21,6 +22,8 @@ interface SurvivalHUDProps {
   onShareLink?: () => void;
   onToggleCamera?: () => void;
   cameraMode?: 'first' | 'third-back' | 'third-front';
+  activePotionEffects?: ActivePotionEffect[];
+  bossHp?: { name: string; current: number; max: number } | null;
 }
 
 export const SurvivalHUD: React.FC<SurvivalHUDProps> = ({
@@ -40,6 +43,8 @@ export const SurvivalHUD: React.FC<SurvivalHUDProps> = ({
   onShareLink,
   onToggleCamera,
   cameraMode = 'first',
+  activePotionEffects = [],
+  bossHp,
 }) => {
   const [isFlashing, setIsFlashing] = useState(false);
 
@@ -51,7 +56,6 @@ export const SurvivalHUD: React.FC<SurvivalHUDProps> = ({
     }
   }, [damageFlashTrigger]);
 
-  // Render 10 Hearts (each represents 2 HP)
   const renderHearts = () => {
     const hearts = [];
     for (let i = 0; i < 10; i++) {
@@ -68,7 +72,6 @@ export const SurvivalHUD: React.FC<SurvivalHUDProps> = ({
           }`}
           style={{ animationDuration: `${600 + i * 40}ms` }}
         >
-          {/* Heart Container (Background) */}
           <svg viewBox="0 0 24 24" className="w-4 h-4 drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]">
             <path
               d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"
@@ -93,10 +96,7 @@ export const SurvivalHUD: React.FC<SurvivalHUDProps> = ({
                 />
               </g>
             ) : null}
-            {/* Shimmer Highlight */}
-            {(isFull || isHalf) && (
-              <circle cx="7" cy="7" r="1.5" fill="#fecaca" />
-            )}
+            {(isFull || isHalf) && <circle cx="7" cy="7" r="1.5" fill="#fecaca" />}
           </svg>
         </div>
       );
@@ -104,7 +104,6 @@ export const SurvivalHUD: React.FC<SurvivalHUDProps> = ({
     return hearts;
   };
 
-  // Render 10 Armor Shields (up to 20 Armor Points)
   const renderArmor = () => {
     if (armorPoints <= 0) return null;
     const shields = [];
@@ -150,7 +149,6 @@ export const SurvivalHUD: React.FC<SurvivalHUDProps> = ({
     );
   };
 
-  // Render 10 Drumsticks / Hunger points (each represents 2 Hunger)
   const renderHunger = () => {
     const drumsticks = [];
     for (let i = 0; i < 10; i++) {
@@ -166,16 +164,13 @@ export const SurvivalHUD: React.FC<SurvivalHUDProps> = ({
             isHungry ? 'animate-pulse' : ''
           }`}
         >
-          {/* Drumstick SVG Icon */}
           <svg viewBox="0 0 24 24" className="w-4 h-4 drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]">
-            {/* Bone + meat base */}
             <path
               d="M19 5 C 16 3, 11 6, 9 11 L 6 14 C 4 15, 4 17, 5 18 C 6 19, 8 19, 9 18 L 12 15 C 17 13, 21 8, 19 5 Z"
               fill="#1e293b"
               stroke="#0f172a"
               strokeWidth="2"
             />
-            {/* Bone knuckle */}
             <circle cx="5" cy="19" r="1.5" fill="#e2e8f0" />
             <circle cx="7" cy="20" r="1.5" fill="#e2e8f0" />
 
@@ -205,13 +200,11 @@ export const SurvivalHUD: React.FC<SurvivalHUDProps> = ({
 
   return (
     <>
-      {/* Real-time Navigation Mini-Map for Survival HUD */}
       <MiniMap playerTransform={playerTransform} activeEvent={activeEvent} remotePlayers={remotePlayers} />
 
       {/* Player Nickname Badge & Quick Actions (Top Left) */}
       <div className="fixed top-4 left-4 z-35 pointer-events-auto select-none flex items-center gap-2">
         <div className="bg-slate-900/90 border border-slate-700/80 backdrop-blur-md rounded-2xl px-3 py-1.5 shadow-xl flex items-center gap-2">
-          {/* Steve Head Icon */}
           <div className="w-7 h-7 rounded bg-[#c68958] border border-amber-500/80 flex flex-col items-center justify-center overflow-hidden shrink-0 shadow">
             <div className="w-full h-1.5 bg-[#4a2e18]" />
             <div className="flex items-center justify-between w-4 mt-0.5">
@@ -228,7 +221,6 @@ export const SurvivalHUD: React.FC<SurvivalHUDProps> = ({
             </span>
           </div>
 
-          {/* Edit Nickname Button */}
           {onOpenNicknameModal && (
             <button
               onClick={onOpenNicknameModal}
@@ -239,7 +231,6 @@ export const SurvivalHUD: React.FC<SurvivalHUDProps> = ({
             </button>
           )}
 
-          {/* Share Game Link Button */}
           {onShareLink && (
             <button
               onClick={onShareLink}
@@ -250,7 +241,6 @@ export const SurvivalHUD: React.FC<SurvivalHUDProps> = ({
             </button>
           )}
 
-          {/* Camera View Mode Toggle Button */}
           {onToggleCamera && (
             <button
               onClick={onToggleCamera}
@@ -264,8 +254,52 @@ export const SurvivalHUD: React.FC<SurvivalHUDProps> = ({
         </div>
       </div>
 
+      {/* Active Potion Status Effects List (Top Right) */}
+      {activePotionEffects.length > 0 && (
+        <div className="fixed top-4 right-44 z-35 pointer-events-none select-none flex flex-col gap-1.5 items-end">
+          {activePotionEffects.map((eff) => (
+            <div
+              key={eff.id}
+              className="bg-slate-950/90 border border-slate-700 px-3 py-1 rounded-xl shadow-xl backdrop-blur-md flex items-center gap-2 text-xs font-mono font-bold"
+              style={{ color: eff.color }}
+            >
+              <span>{eff.icon}</span>
+              <span>{eff.name}</span>
+              <span className="text-slate-300 font-mono text-[11px] bg-slate-900 px-1.5 py-0.5 rounded border border-slate-800">
+                {Math.floor(eff.durationLeft / 60)}:
+                {Math.floor(eff.durationLeft % 60)
+                  .toString()
+                  .padStart(2, '0')}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Boss Fight Health Bar (Top Center) */}
+      {(bossHp || activeEvent?.type === 'boss_raid') && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-40 pointer-events-none select-none flex flex-col items-center w-80 max-w-[90vw]">
+          <div className="bg-slate-950/95 border-2 border-purple-500/80 rounded-2xl px-4 py-2 shadow-2xl backdrop-blur-xl w-full flex flex-col gap-1">
+            <div className="flex items-center justify-between text-xs font-bold font-mono text-purple-300">
+              <span>👾 {bossHp?.name || 'Ancient Wither Boss'}</span>
+              <span>{bossHp ? `${bossHp.current} / ${bossHp.max}` : '200 / 200 HP'}</span>
+            </div>
+            <div className="w-full h-3 bg-slate-900 rounded-full border border-purple-800/80 overflow-hidden relative">
+              <div
+                className="h-full bg-gradient-to-r from-purple-600 via-pink-500 to-rose-500 transition-all duration-300"
+                style={{
+                  width: `${
+                    bossHp ? (bossHp.current / bossHp.max) * 100 : 100
+                  }%`,
+                }}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Mini-game Active Event Banner Overlay */}
-      {activeEvent && (
+      {activeEvent && activeEvent.type !== 'boss_raid' && (
         <div className="fixed top-16 left-1/2 -translate-x-1/2 z-35 pointer-events-none select-none flex flex-col items-center max-w-[90vw]">
           <div className="bg-slate-900/95 border-2 border-amber-500/80 rounded-2xl px-6 py-2.5 shadow-2xl backdrop-blur-xl flex flex-col items-center gap-1">
             <div className="text-amber-300 font-bold text-sm font-mono flex items-center gap-2 flex-wrap justify-center">
@@ -307,9 +341,8 @@ export const SurvivalHUD: React.FC<SurvivalHUDProps> = ({
         }`}
       />
 
-      {/* Survival HUD Bars (Sitting right above hotbar) */}
+      {/* Survival HUD Bars */}
       <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-35 pointer-events-none select-none flex items-center justify-between w-[440px] max-w-[94vw] px-2">
-        {/* Left: Armor Bar & 10 Hearts (20 HP) */}
         <div className="flex flex-col gap-0.5">
           {renderArmor()}
           <div className="flex items-center gap-0.5 bg-slate-950/70 p-1.5 rounded-xl border border-slate-800 backdrop-blur-md shadow-lg">
@@ -323,7 +356,6 @@ export const SurvivalHUD: React.FC<SurvivalHUDProps> = ({
           </div>
         </div>
 
-        {/* Center: Sprinting Indicator Badge */}
         {isSprinting && (
           <div className="px-2.5 py-0.5 rounded-full bg-amber-500/90 text-slate-950 font-bold text-[10px] font-mono shadow-md flex items-center gap-1 animate-pulse">
             <Zap className="w-3 h-3 fill-slate-950" />
@@ -331,7 +363,6 @@ export const SurvivalHUD: React.FC<SurvivalHUDProps> = ({
           </div>
         )}
 
-        {/* Right: 10 Drumsticks (20 Hunger) */}
         <div className="flex flex-col items-end gap-0.5">
           <div className="flex items-center gap-0.5 bg-slate-950/70 p-1.5 rounded-xl border border-slate-800 backdrop-blur-md shadow-lg">
             {renderHunger()}

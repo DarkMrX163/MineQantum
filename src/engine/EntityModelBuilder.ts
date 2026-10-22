@@ -1070,6 +1070,87 @@ export class EntityModelBuilder {
   /**
    * Builds a Bird model
    */
+  public static buildWolf(
+    material: THREE.Material,
+    isTamed: boolean = false,
+    scale: number = 1 / 16,
+  ): QuadrupedParts {
+    const group = new THREE.Group();
+
+    // Torso Group
+    const torsoGroup = new THREE.Group();
+    torsoGroup.position.set(0, 7 * scale, 0);
+    const bodyGeo = new THREE.BoxGeometry(6 * scale, 6 * scale, 10 * scale);
+    const bodyMesh = new THREE.Mesh(bodyGeo, material);
+    torsoGroup.add(bodyMesh);
+    group.add(torsoGroup);
+
+    // Red collar if tamed
+    if (isTamed) {
+      const collarGeo = new THREE.BoxGeometry(6.4 * scale, 1.8 * scale, 2.2 * scale);
+      const collarMat = new THREE.MeshBasicMaterial({ color: 0xef4444 });
+      const collarMesh = new THREE.Mesh(collarGeo, collarMat);
+      collarMesh.position.set(0, 8.5 * scale, 4.5 * scale);
+      group.add(collarMesh);
+    }
+
+    // Head Group & Snout
+    const headGroup = new THREE.Group();
+    headGroup.position.set(0, 9.5 * scale, 6 * scale);
+
+    const headGeo = new THREE.BoxGeometry(6 * scale, 6 * scale, 6 * scale);
+    const headMesh = new THREE.Mesh(headGeo, material);
+    headGroup.add(headMesh);
+
+    const snoutGeo = new THREE.BoxGeometry(3 * scale, 3 * scale, 4 * scale);
+    const snoutMesh = new THREE.Mesh(snoutGeo, material);
+    snoutMesh.position.set(0, -1 * scale, 4 * scale);
+    headGroup.add(snoutMesh);
+    group.add(headGroup);
+
+    // 4 Legs
+    const legGeo = new THREE.BoxGeometry(2 * scale, 8 * scale, 2 * scale);
+
+    const frontLeftLeg = new THREE.Group();
+    frontLeftLeg.position.set(2 * scale, 8 * scale, 4 * scale);
+    const flMesh = new THREE.Mesh(legGeo, material);
+    flMesh.position.set(0, -4 * scale, 0);
+    frontLeftLeg.add(flMesh);
+    group.add(frontLeftLeg);
+
+    const frontRightLeg = new THREE.Group();
+    frontRightLeg.position.set(-2 * scale, 8 * scale, 4 * scale);
+    const frMesh = new THREE.Mesh(legGeo, material);
+    frMesh.position.set(0, -4 * scale, 0);
+    frontRightLeg.add(frMesh);
+    group.add(frontRightLeg);
+
+    const backLeftLeg = new THREE.Group();
+    backLeftLeg.position.set(2 * scale, 8 * scale, -4 * scale);
+    const blMesh = new THREE.Mesh(legGeo, material);
+    blMesh.position.set(0, -4 * scale, 0);
+    backLeftLeg.add(blMesh);
+    group.add(backLeftLeg);
+
+    const backRightLeg = new THREE.Group();
+    backRightLeg.position.set(-2 * scale, 8 * scale, -4 * scale);
+    const brMesh = new THREE.Mesh(legGeo, material);
+    brMesh.position.set(0, -4 * scale, 0);
+    backRightLeg.add(brMesh);
+    group.add(backRightLeg);
+
+    return {
+      group,
+      head: headGroup,
+      torso: torsoGroup,
+      legFrontLeft: frontLeftLeg,
+      legFrontRight: frontRightLeg,
+      legBackLeft: backLeftLeg,
+      legBackRight: backRightLeg,
+      type: "cow",
+    };
+  }
+
   public static buildBird(
     material: THREE.Material,
     scale: number = 1 / 16,

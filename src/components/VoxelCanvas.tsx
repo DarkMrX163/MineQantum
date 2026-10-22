@@ -40,7 +40,17 @@ interface VoxelCanvasProps {
   onSprintChange?: (isSprinting: boolean) => void;
   canSprint?: boolean;
   onEatFood?: (item: SlotItem) => void;
+  onDrinkPotion?: (potionId: string) => void;
   onOpenCraftingTable?: () => void;
+  onOpenChest?: (chestData: {
+    x: number;
+    y: number;
+    z: number;
+    items: (SlotItem | null)[];
+    onUpdateChest: (items: (SlotItem | null)[]) => void;
+  }) => void;
+  onOpenEnchantingTable?: () => void;
+  onOpenBrewingStand?: () => void;
   respawnTrigger?: number;
   deathScatterTrigger?: {
     items: (SlotItem | null)[];
@@ -98,7 +108,11 @@ export const VoxelCanvas: React.FC<VoxelCanvasProps> = ({
   onSprintChange,
   canSprint = true,
   onEatFood,
+  onDrinkPotion,
   onOpenCraftingTable,
+  onOpenChest,
+  onOpenEnchantingTable,
+  onOpenBrewingStand,
   respawnTrigger = 0,
   deathScatterTrigger,
   isFlyMode,
@@ -377,9 +391,40 @@ export const VoxelCanvas: React.FC<VoxelCanvasProps> = ({
       onEatFood?.(item);
     };
 
+    // Potion drinking callback
+    controller.onDrinkPotion = (potionId) => {
+      onDrinkPotion?.(potionId);
+    };
+
     // Open Crafting Table callback
     controller.onOpenCraftingTable = () => {
       onOpenCraftingTable?.();
+    };
+
+    // Open Storage Chest callback
+    controller.onOpenChest = (pos) => {
+      if (onOpenChest) {
+        const items = chunkManager.getChestStorage(pos.x, pos.y, pos.z);
+        onOpenChest({
+          x: pos.x,
+          y: pos.y,
+          z: pos.z,
+          items,
+          onUpdateChest: (newItems) => {
+            chunkManager.setChestStorage(pos.x, pos.y, pos.z, newItems);
+          },
+        });
+      }
+    };
+
+    // Open Enchanting Table callback
+    controller.onOpenEnchantingTable = () => {
+      onOpenEnchantingTable?.();
+    };
+
+    // Open Brewing Stand callback
+    controller.onOpenBrewingStand = () => {
+      onOpenBrewingStand?.();
     };
 
     // Player melee attack against mobs in front of crosshair
@@ -396,13 +441,22 @@ export const VoxelCanvas: React.FC<VoxelCanvasProps> = ({
       return false;
     };
 
-    // Player right-click interaction with friendly Villagers
+    // Player right-click interaction with mobs (wolf taming with bone, feeding animals with wheat, trading with Villagers)
     controller.onInteractMobRequest = () => {
-      const res = mobManager.interactWithVillagerAtRay(camera);
-      if (res.interacted) {
+      const mobRes = mobManager.interactMobAtRay(camera, heldItem?.id);
+      if (mobRes.interacted) {
         handSwingTimer = 0.25;
-        if (res.message && onEventNotification) {
-          onEventNotification(res.message);
+        if (mobRes.message && onEventNotification) {
+          onEventNotification(mobRes.message);
+        }
+        return true;
+      }
+
+      const vilRes = mobManager.interactWithVillagerAtRay(camera);
+      if (vilRes.interacted) {
+        handSwingTimer = 0.25;
+        if (vilRes.message && onEventNotification) {
+          onEventNotification(vilRes.message);
         }
         return true;
       }
